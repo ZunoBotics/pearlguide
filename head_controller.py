@@ -4,8 +4,8 @@ Head Controller for EZ-InMoov based robot head.
 PCA9685 16-channel servo driver wiring:
   D0 (CH0) - Eye Tilt  (MG90S micro servo)
   D1 (CH1) - Eye Pan   (MG90S micro servo)
+  D2 (CH2) - Head Pan  (MG996 13KG servo)
   D3 (CH3) - Jaw       (MG996 13KG servo)
-  D4 (CH4) - Head Pan  (MG996 13KG servo)
 
 I2C wiring to Raspberry Pi:
   SCL -> GPIO3 / Pin 5
@@ -30,12 +30,12 @@ except (ImportError, Exception) as exc:
 CHANNEL_EYE_TILT = 0
 CHANNEL_EYE_PAN  = 1
 CHANNEL_JAW      = 3
-CHANNEL_HEAD_PAN = 4
+CHANNEL_HEAD_PAN = 2
 SERVO_CHANNELS = (
-    CHANNEL_EYE_TILT,
-    CHANNEL_EYE_PAN,
-    CHANNEL_JAW,
-    CHANNEL_HEAD_PAN,
+    CHANNEL_EYE_TILT,   # CH0
+    CHANNEL_EYE_PAN,    # CH1
+    CHANNEL_HEAD_PAN,   # CH2
+    CHANNEL_JAW,        # CH3
 )
 
 # Servo angle limits (degrees)

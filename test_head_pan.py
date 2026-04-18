@@ -4,7 +4,7 @@ Head-pan full-range test.
 Purpose
 -------
 The head_controller.py clamps head pan to 30–150° for safe operation.
-This script bypasses those limits and drives the PCA9685 channel 4
+This script bypasses those limits and drives the PCA9685 channel 2
 (head pan servo) directly so you can verify the physical full range
 and find the safe mechanical limits for your specific mounting.
 
@@ -34,7 +34,7 @@ except ImportError:
     print("ERROR: adafruit_servokit not installed. Run:  pip install -r requirements.txt")
     raise SystemExit(1)
 
-CHANNEL = 4          # head pan is on CH4
+CHANNEL = 2          # head pan is on CH2
 PULSE_MIN = 500      # µs — standard servo minimum pulse (0°)
 PULSE_MAX = 2500     # µs — standard servo maximum pulse (180°)
 FREQUENCY = 50       # Hz

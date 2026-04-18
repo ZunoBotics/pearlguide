@@ -37,8 +37,8 @@ python main.py
 | Servo driver | PCA9685 16-channel, I2C address `0x40` |
 | Eye tilt | MG90S → **D0 (CH0)** |
 | Eye pan | MG90S → **D1 (CH1)** |
+| Head pan | MG996 → **D2 (CH2)** |
 | Jaw | MG996 → **D3 (CH3)** |
-| Head pan | MG996 → **D4 (CH4)** |
 | Camera | USB camera (mounted on one eye) |
 | Audio | 7.1-channel USB audio adapter (mic + speaker) |
 
@@ -102,7 +102,7 @@ cp .env.example .env
 ```bash
 export GEMINI_API_KEY="your-key-here"
 # To persist across reboots:
-echo 'export GEMINI_API_KEY="your-key-here"' >> ~/.bashrc
+echo 'export GEMINI_API_KEY="AIzaSyC-G0PyvelljWqWqIpIuUdDSMGv8FQMl7c"' >> ~/.bashrc
 ```
 
 > **Note:** `.env` is listed in `.gitignore` and will never be committed.
