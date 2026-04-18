@@ -35,8 +35,8 @@ except ImportError:
     raise SystemExit(1)
 
 CHANNEL = 2          # head pan is on CH2
-PULSE_MIN = 500      # µs — standard servo minimum pulse (0°)
-PULSE_MAX = 2500     # µs — standard servo maximum pulse (180°)
+PULSE_MIN = 1000      # µs — standard servo minimum pulse (0°)
+PULSE_MAX = 2600     # µs — extended maximum pulse (180°)
 FREQUENCY = 50       # Hz
 
 kit = ServoKit(channels=16, address=0x40, frequency=FREQUENCY)

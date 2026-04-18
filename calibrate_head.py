@@ -40,8 +40,8 @@ except ImportError:
     raise SystemExit(1)
 
 CHANNEL   = 2        # head pan
-PULSE_MIN = 500      # µs → 0°
-PULSE_MAX = 2500     # µs → 180°
+PULSE_MIN = 1000      # µs → 0°
+PULSE_MAX = 2600     # µs → 180°
 FREQ      = 50       # Hz
 
 OUTPUT_FILE = os.path.join(os.path.dirname(__file__), "head_calibration.json")
