@@ -15,6 +15,8 @@ I2C wiring to Raspberry Pi:
 """
 
 import time
+import json
+import os
 
 try:
     from adafruit_servokit import ServoKit
@@ -38,10 +40,10 @@ SERVO_CHANNELS = (
     CHANNEL_JAW,        # CH3
 )
 
-# Servo angle limits (degrees)
+# Servo angle limits (degrees) — defaults, overridden by head_calibration.json if present
 EYE_TILT_MIN, EYE_TILT_MAX = 60, 120    # centre = 90
 EYE_PAN_MIN,  EYE_PAN_MAX  = 50, 130    # centre = 90
-JAW_MIN,      JAW_MAX      = 0,  135     # 0 = closed, 135 = wide open (servo supports 0-180)
+JAW_MIN,      JAW_MAX      = 0,  135    # 0 = closed, 135 = wide open
 HEAD_PAN_MIN, HEAD_PAN_MAX = 30, 150    # centre = 90
 
 # Default neutral positions
@@ -51,6 +53,28 @@ NEUTRAL = {
     CHANNEL_JAW:       0,
     CHANNEL_HEAD_PAN: 90,
 }
+
+# ---------------------------------------------------------------------------
+# Load calibration file if present
+# ---------------------------------------------------------------------------
+_CAL_FILE = os.path.join(os.path.dirname(__file__), "head_calibration.json")
+
+def _load_calibration():
+    global HEAD_PAN_MIN, HEAD_PAN_MAX, NEUTRAL
+    if not os.path.exists(_CAL_FILE):
+        return
+    try:
+        with open(_CAL_FILE) as f:
+            cal = json.load(f)
+        HEAD_PAN_MIN = float(cal.get("left_limit",  HEAD_PAN_MIN))
+        HEAD_PAN_MAX = float(cal.get("right_limit", HEAD_PAN_MAX))
+        NEUTRAL[CHANNEL_HEAD_PAN] = float(cal.get("centre", NEUTRAL[CHANNEL_HEAD_PAN]))
+        print(f"[HeadController] Calibration loaded: centre={NEUTRAL[CHANNEL_HEAD_PAN]}°  "
+              f"left={HEAD_PAN_MIN}°  right={HEAD_PAN_MAX}°")
+    except Exception as exc:
+        print(f"[HeadController] Could not load calibration ({exc}), using defaults.")
+
+_load_calibration()
 
 
 class HeadController:
