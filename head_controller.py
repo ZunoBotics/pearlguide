@@ -51,7 +51,7 @@ NEUTRAL = {
     CHANNEL_EYE_TILT: 90,
     CHANNEL_EYE_PAN:  90,
     CHANNEL_JAW:       0,
-    CHANNEL_HEAD_PAN: 90,
+    CHANNEL_HEAD_PAN: 130,
 }
 
 # ---------------------------------------------------------------------------

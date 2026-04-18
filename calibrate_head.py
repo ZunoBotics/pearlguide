@@ -209,7 +209,7 @@ def main():
             return
 
     steps = [
-        ("centre",      "Point the head straight forward (neutral position).", 90.0),
+        ("centre",      "Point the head straight forward (neutral position).", 130.0),
         ("left_limit",  "Turn the head as far left as it can go comfortably.", 30.0),
         ("right_limit", "Turn the head as far right as it can go comfortably.", 150.0),
     ]
