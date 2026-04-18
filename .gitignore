@@ -13,8 +13,8 @@ build/
 .env.*
 !.env.example
 
-# Machine-specific calibration — run calibrate_head.py to generate locally
-head_calibration.json
+# Machine-specific calibration — committed for single-robot deployments
+# head_calibration.json
 
 # Virtual environments
 venv/

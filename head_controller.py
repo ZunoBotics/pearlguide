@@ -51,7 +51,7 @@ NEUTRAL = {
     CHANNEL_EYE_TILT: 90,
     CHANNEL_EYE_PAN:  90,
     CHANNEL_JAW:       0,
-    CHANNEL_HEAD_PAN: 130,
+    CHANNEL_HEAD_PAN: 90,
 }
 
 # ---------------------------------------------------------------------------
@@ -105,9 +105,9 @@ class HeadController:
 
     def _configure_servos(self):
         """Set appropriate pulse-width ranges for MG90S and MG996 servos."""
-        # Both MG90S and MG996 use a 500–2500 µs pulse range for full 180°
+        # Both MG90S and MG996 use a 1000–2600 µs pulse range for full 180°
         for ch in SERVO_CHANNELS:
-            self._kit.servo[ch].set_pulse_width_range(500, 2500)
+            self._kit.servo[ch].set_pulse_width_range(1000, 2600)
 
     def _set_angle(self, channel: int, angle: float):
         angle = float(angle)
