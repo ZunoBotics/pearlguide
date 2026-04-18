@@ -39,6 +39,7 @@ CHUNK_SIZE          = 1024     # frames per mic read
 JAW_SMOOTHING   = 0.4    # EMA factor (0=slow, 1=instant)
 JAW_NOISE_FLOOR = 200    # RMS below this → jaw closed
 JAW_SCALE       = 6_000  # RMS at this level → jaw fully open
+JAW_UPDATE_FRAMES = 512   # jaw animation granularity — ~21 ms at 24 kHz
 
 # Audio playback buffering — accumulate this many output frames before each write.
 # Larger = smoother playback, slightly more latency (~85 ms at 48 kHz).
@@ -243,34 +244,55 @@ class GeminiLiveAgent:
     async def _play_audio(self, spk_stream, audio_in_queue):
         """Drain audio_in_queue, resample, upmix, animate jaw, write to speaker.
 
-        Audio from Gemini arrives in many tiny chunks. Writing each chunk
-        individually causes buffer gaps and crackling. Instead we accumulate
-        chunks into a buffer and flush only when we have SPEAKER_BUFFER_FRAMES
-        frames worth of data, or when a turn-end sentinel (None) is received.
+        Audio from Gemini arrives in many tiny chunks. We accumulate into a
+        buffer until SPEAKER_BUFFER_FRAMES are ready, then flush in
+        JAW_UPDATE_FRAMES-sized windows so the jaw tracks the audio in
+        near-real-time rather than jumping once per full flush.
         """
         min_bytes = SPEAKER_BUFFER_FRAMES * 2 * self._spk_channels  # frames * 2 bytes * ch
-        buf = bytearray()
-        rms_accum = []  # collect RMS values across chunks; update jaw once per flush
+        buf      = bytearray()   # speaker buffer (mono or stereo)
+        mono_buf = bytearray()   # always mono int16 — used for per-window jaw RMS
 
-        async def _flush(buf, rms_accum):
-            if buf:
-                # Update jaw position once per flush — reduces servo thrashing and
-                # the electrical noise it induces on the USB audio power rail.
-                if rms_accum:
-                    avg_rms = float(np.mean(rms_accum))
-                    rms_accum.clear()
-                    if self._head is not None:
-                        target = 0.0 if avg_rms < JAW_NOISE_FLOOR else min(1.0, (avg_rms - JAW_NOISE_FLOOR) / (JAW_SCALE - JAW_NOISE_FLOOR))
-                        self._jaw_level = JAW_SMOOTHING * target + (1 - JAW_SMOOTHING) * self._jaw_level
+        async def _flush(buf, mono_buf):
+            if not buf:
+                mono_buf.clear()
+                return
+
+            # Sub-window strides
+            mono_stride = JAW_UPDATE_FRAMES * 2                        # bytes (int16 mono)
+            spk_stride  = JAW_UPDATE_FRAMES * 2 * self._spk_channels   # bytes (int16, ch)
+
+            self._speaking = True
+            try:
+                pos_s = 0
+                pos_m = 0
+                while pos_s < len(buf):
+                    spk_chunk  = bytes(buf[pos_s  : pos_s  + spk_stride])
+                    mono_chunk = bytes(mono_buf[pos_m : pos_m + mono_stride])
+
+                    # Animate jaw from the mono slice matching this audio window
+                    if mono_chunk and self._head is not None:
+                        rms    = _rms_amplitude(mono_chunk)
+                        target = 0.0 if rms < JAW_NOISE_FLOOR else min(
+                            1.0,
+                            (rms - JAW_NOISE_FLOOR) / (JAW_SCALE - JAW_NOISE_FLOOR),
+                        )
+                        self._jaw_level = (
+                            JAW_SMOOTHING * target
+                            + (1.0 - JAW_SMOOTHING) * self._jaw_level
+                        )
                         self._head.set_jaw(self._jaw_level)
-                self._speaking = True
-                try:
-                    await asyncio.to_thread(spk_stream.write, bytes(buf))
-                except OSError as exc:
-                    print(f"[GeminiLiveAgent] Speaker write error (skipping): {exc}")
-                finally:
-                    self._speaking = False
-                buf.clear()
+
+                    await asyncio.to_thread(spk_stream.write, spk_chunk)
+
+                    pos_s += spk_stride
+                    pos_m += mono_stride
+            except OSError as exc:
+                print(f"[GeminiLiveAgent] Speaker write error (skipping): {exc}")
+            finally:
+                self._speaking = False
+            buf.clear()
+            mono_buf.clear()
 
         try:
             while self._running:
@@ -278,11 +300,10 @@ class GeminiLiveAgent:
 
                 # Sentinel from _receive_audio signals end of turn
                 if audio_bytes is None:
-                    await _flush(buf, rms_accum)
+                    await _flush(buf, mono_buf)
                     self._close_jaw()
                     continue
 
-                # Accumulate RMS for jaw animation (computed after resampling below)
                 if self._spk_native_rate != SPEAKER_SAMPLE_RATE:
                     audio_bytes, self._rs_spk = audioop.ratecv(
                         audio_bytes, 2, 1, SPEAKER_SAMPLE_RATE, self._spk_native_rate, self._rs_spk
@@ -291,7 +312,8 @@ class GeminiLiveAgent:
                 if len(audio_bytes) % 2 != 0:
                     audio_bytes = audio_bytes[:-1]
 
-                rms_accum.append(_rms_amplitude(audio_bytes))
+                # Keep mono copy for jaw animation before potential stereo upmix
+                mono_buf.extend(audio_bytes)
 
                 if self._spk_channels == 2:
                     audio_bytes = audioop.tostereo(audio_bytes, 2, 1, 1)
@@ -299,12 +321,12 @@ class GeminiLiveAgent:
                 buf.extend(audio_bytes)
 
                 if len(buf) >= min_bytes:
-                    await _flush(buf, rms_accum)
+                    await _flush(buf, mono_buf)
 
         except asyncio.CancelledError:
             pass
         finally:
-            await _flush(buf, rms_accum)
+            await _flush(buf, mono_buf)
             self._close_jaw()
 
     # ------------------------------------------------------------------

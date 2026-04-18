@@ -2,7 +2,7 @@
 
 An interactive robot head that holds real-time voice conversations with museum visitors using the Google Gemini Live API. The jaw servo animates in sync with the robot's speech.
 
-> **Project:** Pearl Guide — ZunoBotics museum robot  
+> **Project:** Pearl Guide — ZunoBotics AI Powered Tour Guide Robot  
 > **Branch:** `robot-head`
 
 ---
