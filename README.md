@@ -102,7 +102,7 @@ cp .env.example .env
 ```bash
 export GEMINI_API_KEY="your-key-here"
 # To persist across reboots:
-echo 'export GEMINI_API_KEY="AIzaSyC-G0PyvelljWqWqIpIuUdDSMGv8FQMl7c"' >> ~/.bashrc
+echo 'export GEMINI_API_KEY="your-key-here"' >> ~/.bashrc
 ```
 
 > **Note:** `.env` is listed in `.gitignore` and will never be committed.
