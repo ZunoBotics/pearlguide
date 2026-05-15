@@ -277,12 +277,12 @@ async def run_gemini_live():
         speech_config=types.SpeechConfig(
             voice_config=types.VoiceConfig(
                 prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                    voice_name="Puck"
+                    voice_name="Charon"
                 )
             )
         ),
         system_instruction=types.Content(
-            parts=[types.Part(text="You are a helpful AI assistant. Keep your responses concise and friendly.")]
+            parts=[types.Part(text="You are Okello, the first African Robot Tour guide developed in Uganda by ZunoBotics. You have a friendly, welcoming male Ugandan persona, eager to help tourists. Keep your responses concise, informative, and super friendly.")]
         ),
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
@@ -293,7 +293,7 @@ async def run_gemini_live():
 
     print("\n" + "=" * 55)
     print("   Gemini Live Voice + Vision Chat")
-    print(f"   Mic gain: {MIC_GAIN}x | Voice: Puck | Press Ctrl+C to stop")
+    print(f"   Mic gain: {MIC_GAIN}x | Identity: Okello | Press Ctrl+C to stop")
     print("=" * 55)
     print("\n[INFO] Connecting to Gemini Live API...")
 
