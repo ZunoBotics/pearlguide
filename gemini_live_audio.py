@@ -30,6 +30,8 @@ import numpy as np
 import cv2
 import time
 
+from head_controller import HeadController
+
 # ─── Configuration ───────────────────────────────────────────────────────────
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -136,6 +138,7 @@ class AudioOutput:
     def __init__(self):
         self.process = None
         self.expected_end_time = 0.0
+        self.head = None
 
     def start(self):
         self.process = subprocess.Popen(
@@ -167,6 +170,15 @@ class AudioOutput:
             if self.expected_end_time < now:
                 self.expected_end_time = now
             self.expected_end_time += duration
+            
+            # Animate the jaw based on volume level
+            if self.head and self.head.hardware_ready:
+                samples = np.frombuffer(audio_bytes, dtype=np.int16)
+                peak = np.max(np.abs(samples))
+                # Map typical speech peak (0 - 15000) to 0.0 - 1.0 open amount
+                open_amount = min(1.0, float(peak) / 15000.0)
+                self.head.set_jaw(open_amount)
+                
         except (BrokenPipeError, OSError):
             pass
 
@@ -303,6 +315,20 @@ async def run_gemini_live():
         realtime_input_config=types.RealtimeInputConfig(
             turn_coverage="TURN_INCLUDES_ONLY_ACTIVITY",
         ),
+        tools=[{"function_declarations": [
+            {
+                "name": "look_around",
+                "description": "Look around the environment to observe your surroundings. Use this when the user asks you to observe carefully, look around, or check the room."
+            },
+            {
+                "name": "nod_head",
+                "description": "Nod your head to agree or say yes."
+            },
+            {
+                "name": "shake_head",
+                "description": "Shake your head to disagree or say no."
+            }
+        ]}]
     )
 
     print("\n" + "=" * 55)
@@ -314,6 +340,10 @@ async def run_gemini_live():
     video_in = VideoInput(device="/dev/video0")
     audio_in = AudioInput(gain=MIC_GAIN)
     audio_out = AudioOutput()
+    
+    # Initialize the robot head for mouth and movement
+    head = HeadController()
+    audio_out.head = head
 
     try:
         video_in.start()
@@ -323,7 +353,6 @@ async def run_gemini_live():
         async with client.aio.live.connect(model=MODEL_NAME, config=config) as session:
             print("[INFO] Connected! Start talking to Gemini...\n")
 
-            # ── Task: Send mic audio to Gemini ──
             async def send_audio():
                 chunk_count = 0
                 try:
@@ -331,6 +360,9 @@ async def run_gemini_live():
                         chunk, original_peak = await asyncio.to_thread(audio_in.read_chunk)
                         
                         playing = audio_out.is_playing()
+                        if not playing and head.hardware_ready:
+                            head.close_jaw()
+                            
                         if chunk and len(chunk) > 0:
                             chunk_count += 1
                             if chunk_count % 50 == 0:
@@ -364,6 +396,32 @@ async def run_gemini_live():
                         async for response in session.receive():
                             if not running:
                                 break
+                                
+                            # Handle tool calls (function calls)
+                            if response.tool_call is not None:
+                                for fc in response.tool_call.function_calls:
+                                    print(f"\n[TOOL CALL] Gemini decided to run: {fc.name}")
+                                    if head.hardware_ready:
+                                        if fc.name == "look_around":
+                                            head.shake_head(cycles=1, amplitude=30)
+                                            head.look_at(pan=60, tilt=90)
+                                            time.sleep(0.5)
+                                            head.look_at(pan=120, tilt=90)
+                                            time.sleep(0.5)
+                                            head.center_all()
+                                        elif fc.name == "nod_head":
+                                            head.nod(cycles=2)
+                                        elif fc.name == "shake_head":
+                                            head.shake_head(cycles=2)
+                                    
+                                    # Always send a response back telling it it succeeded
+                                    await session.send_tool_response(
+                                        function_responses=[{
+                                            "id": fc.id,
+                                            "name": fc.name,
+                                            "response": {"result": "Action completed successfully."}
+                                        }]
+                                    )
 
                             # Server content (audio + transcriptions)
                             if response.server_content:

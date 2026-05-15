@@ -1,0 +1,8 @@
+{
+  "channel": 2,
+  "pulse_min_us": 1000,
+  "pulse_max_us": 2600,
+  "centre": 90.0,
+  "left_limit": 30.0,
+  "right_limit": 150.0
+}
