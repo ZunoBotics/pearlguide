@@ -28,6 +28,7 @@ import signal
 import asyncio
 import numpy as np
 import cv2
+import time
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 
@@ -130,10 +131,11 @@ class AudioInput:
 
 
 class AudioOutput:
-    """Play audio via paplay subprocess."""
+    """Play audio via aplay subprocess."""
 
     def __init__(self):
         self.process = None
+        self.expected_end_time = 0.0
 
     def start(self):
         self.process = subprocess.Popen(
@@ -148,6 +150,7 @@ class AudioOutput:
             stdin=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
+        self.expected_end_time = time.time()
         print(f"[SPEAKER] Started aplay (PID {self.process.pid})")
 
     def write(self, audio_bytes):
@@ -157,8 +160,19 @@ class AudioOutput:
         try:
             self.process.stdin.write(audio_bytes)
             self.process.stdin.flush()
+            
+            # Keep track of exactly how long the speaker will be playing
+            duration = len(audio_bytes) / (OUTPUT_SAMPLE_RATE * OUTPUT_CHANNELS * 2.0)
+            now = time.time()
+            if self.expected_end_time < now:
+                self.expected_end_time = now
+            self.expected_end_time += duration
         except (BrokenPipeError, OSError):
             pass
+
+    def is_playing(self):
+        # We add 0.5 sec to let reverberations wrap up before listening again
+        return time.time() < (self.expected_end_time + 0.5)
 
     def stop(self):
         if self.process:
@@ -315,19 +329,26 @@ async def run_gemini_live():
                 try:
                     while running:
                         chunk, original_peak = await asyncio.to_thread(audio_in.read_chunk)
+                        
+                        playing = audio_out.is_playing()
                         if chunk and len(chunk) > 0:
+                            chunk_count += 1
+                            if chunk_count % 50 == 0:
+                                boosted = min(original_peak * MIC_GAIN, 32767)
+                                vol_bar = "█" * min(int(boosted / 1500), 20)
+                                status = "MUTED" if playing else "ACTIVE"
+                                print(f"[MIC] #{chunk_count} [{status}] raw={original_peak:5d} boosted={boosted:5d} {vol_bar}")
+
+                            # Drop frames if the speaker is playing so Gemini doesn't hear itself!
+                            if playing:
+                                continue
+
                             await session.send_realtime_input(
                                 audio=types.Blob(
                                     data=chunk,
                                     mime_type=f"audio/pcm;rate={INPUT_SAMPLE_RATE}",
                                 )
                             )
-
-                            chunk_count += 1
-                            if chunk_count % 50 == 0:
-                                boosted = min(original_peak * MIC_GAIN, 32767)
-                                vol_bar = "█" * min(int(boosted / 1500), 20)
-                                print(f"[MIC] #{chunk_count} raw={original_peak:5d} boosted={boosted:5d} {vol_bar}")
                         else:
                             await asyncio.sleep(0.05)
                 except asyncio.CancelledError:
