@@ -57,6 +57,12 @@ OUTPUT_FORMAT = "s16le"
 # Adjust: 1=no boost, 4=moderate, 8=strong, 16=very strong
 MIC_GAIN = 1
 
+# Jaw animation tuning (EMA = exponential moving average)
+JAW_SMOOTHING    = 0.4   # 0=very slow/smooth, 1=instant
+JAW_NOISE_FLOOR  = 200   # RMS below this level → jaw closed
+JAW_SCALE        = 6000  # RMS at this level → jaw fully open
+JAW_UPDATE_FRAMES = 512  # Process jaw every N output frames (~21 ms at 24 kHz)
+
 # ─── Imports ─────────────────────────────────────────────────────────────────
 
 from google import genai
@@ -88,17 +94,17 @@ class AudioInput:
     def start(self):
         self.process = subprocess.Popen(
             [
-                "arecord",
-                "-D", "plughw:0,0",
-                "-f", "S16_LE",
-                "-r", str(INPUT_SAMPLE_RATE),
-                "-c", str(INPUT_CHANNELS),
-                "-t", "raw",
+                "parecord",
+                "--device=alsa_input.usb-GeneralPlus_USB_Audio_Device-00.mono-fallback",
+                "--format=s16le",
+                "--rate", str(INPUT_SAMPLE_RATE),
+                "--channels", str(INPUT_CHANNELS),
+                "--raw",
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        print(f"[MIC] Started arecord (PID {self.process.pid}, gain={self.gain}x)")
+        print(f"[MIC] Started parecord on GeneralPlus Audio (PID {self.process.pid}, gain={self.gain}x)")
 
     def read_chunk(self):
         """Read one chunk, apply gain, return (bytes, original_peak)."""
@@ -139,16 +145,16 @@ class AudioOutput:
         self.process = None
         self.expected_end_time = 0.0
         self.head = None
+        self._jaw_level = 0.0   # EMA state
 
     def start(self):
         self.process = subprocess.Popen(
             [
-                "aplay",
-                "-D", "plughw:0,0",
-                "-f", "S16_LE",
-                "-r", str(OUTPUT_SAMPLE_RATE),
-                "-c", str(OUTPUT_CHANNELS),
-                "-t", "raw",
+                "paplay",
+                "--raw",
+                "--rate", str(OUTPUT_SAMPLE_RATE),
+                "--channels", str(OUTPUT_CHANNELS),
+                "--format", "s16le",
             ],
             stdin=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -157,28 +163,36 @@ class AudioOutput:
         print(f"[SPEAKER] Started aplay (PID {self.process.pid})")
 
     def write(self, audio_bytes):
-        """Write audio bytes to speaker."""
+        """Write audio bytes to speaker with real-time jaw animation."""
         if self.process is None or self.process.poll() is not None:
             return
         try:
-            self.process.stdin.write(audio_bytes)
-            self.process.stdin.flush()
-            
             # Keep track of exactly how long the speaker will be playing
             duration = len(audio_bytes) / (OUTPUT_SAMPLE_RATE * OUTPUT_CHANNELS * 2.0)
             now = time.time()
             if self.expected_end_time < now:
                 self.expected_end_time = now
             self.expected_end_time += duration
-            
-            # Animate the jaw based on volume level
-            if self.head and self.head.hardware_ready:
-                samples = np.frombuffer(audio_bytes, dtype=np.int16)
-                peak = np.max(np.abs(samples))
-                # Map typical speech peak (0 - 15000) to 0.0 - 1.0 open amount
-                open_amount = min(1.0, float(peak) / 15000.0)
-                self.head.set_jaw(open_amount)
-                
+
+            # Animate jaw in sub-window strides so it tracks speech in near-real-time
+            stride = JAW_UPDATE_FRAMES * 2  # bytes per stride (int16 mono)
+            pos = 0
+            while pos < len(audio_bytes):
+                chunk = audio_bytes[pos: pos + stride]
+                # Write this window to the speaker
+                self.process.stdin.write(chunk)
+                self.process.stdin.flush()
+                # Update jaw from actual RMS of this audio window
+                if self.head is not None and self.head.hardware_ready and len(chunk) >= 2:
+                    samples = np.frombuffer(chunk, dtype=np.int16).astype(np.float32)
+                    rms = float(np.sqrt(np.mean(samples ** 2)))
+                    target = 0.0 if rms < JAW_NOISE_FLOOR else min(
+                        1.0, (rms - JAW_NOISE_FLOOR) / (JAW_SCALE - JAW_NOISE_FLOOR)
+                    )
+                    self._jaw_level = JAW_SMOOTHING * target + (1.0 - JAW_SMOOTHING) * self._jaw_level
+                    self.head.set_jaw(self._jaw_level)
+                pos += stride
+
         except (BrokenPipeError, OSError):
             pass
 
@@ -200,45 +214,101 @@ class AudioOutput:
             print("[SPEAKER] Stopped")
 
 
-class VideoInput:
-    """Capture frames from USB camera using OpenCV."""
+def _detect_cameras():
+    """Auto-detect USB camera capture devices via v4l2-ctl. Returns list of device paths."""
+    try:
+        result = subprocess.run(['v4l2-ctl', '--list-devices'], capture_output=True, text=True)
+        cameras = []
+        lines = result.stdout.splitlines()
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            # Non-indented non-empty line = camera/device name
+            if line and not line.startswith('\t') and '/dev/' not in line:
+                i += 1
+                while i < len(lines) and lines[i].startswith('\t'):
+                    dev = lines[i].strip()
+                    if '/dev/video' in dev:
+                        r = subprocess.run(['v4l2-ctl', '-d', dev, '--info'],
+                                           capture_output=True, text=True)
+                        if 'Video Capture' in r.stdout and 'usb' in r.stdout.lower():
+                            cameras.append(dev)
+                            # Skip remaining devices in this camera group
+                            i += 1
+                            while i < len(lines) and lines[i].startswith('\t'):
+                                i += 1
+                            break
+                    i += 1
+            else:
+                i += 1
+        return cameras if cameras else ['/dev/video0', '/dev/video2']
+    except Exception:
+        return ['/dev/video0', '/dev/video2']
 
-    def __init__(self, device="/dev/video0"):
-        self.device = device
-        self.cap = None
+
+class VideoInput:
+    """Capture frames from multiple USB cameras using OpenCV and stitch them side-by-side."""
+
+    def __init__(self, devices=None):
+        if devices is None:
+            devices = _detect_cameras()
+        self.devices = devices
+        self.caps = []
 
     def start(self):
-        self.cap = cv2.VideoCapture(self.device, cv2.CAP_V4L2)
-        # Lower resolution to save bandwidth & latency
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        print(f"[CAMERA] Started capture on {self.device}")
+        for dev in self.devices:
+            cap = cv2.VideoCapture(dev, cv2.CAP_V4L2)
+            if cap.isOpened():
+                self.caps.append(cap)
+                w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                print(f"[CAMERA] Started capture on {dev} ({w}x{h})")
+            else:
+                print(f"[CAMERA] Warning: Unable to open {dev}")
 
     def read_frame(self):
-        """Read a frame and encode it as JPEG. Returns bytes or None."""
-        if not self.cap or not self.cap.isOpened():
+        """Read frames from all active cameras, resize to same height, stitch side-by-side."""
+        if not self.caps:
             return None
-        ret, frame = self.cap.read()
-        if not ret:
+
+        frames = []
+        for cap in self.caps:
+            ret, frame = cap.read()
+            if ret:
+                frames.append(frame)
+
+        if not frames:
             return None
-        
+
+        # Resize all frames to the same height (320px) before stitching
+        target_h = 320
+        resized = []
+        for f in frames:
+            h, w = f.shape[:2]
+            scale = target_h / h
+            new_w = int(w * scale)
+            resized.append(cv2.resize(f, (new_w, target_h)))
+
+        combined_frame = cv2.hconcat(resized) if len(resized) > 1 else resized[0]
+
         # Encode to JPEG
-        ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+        ret, buffer = cv2.imencode('.jpg', combined_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
         if not ret:
             return None
-            
+
         return buffer.tobytes()
 
     def stop(self):
-        if self.cap:
-            self.cap.release()
-            print("[CAMERA] Stopped")
+        for cap in self.caps:
+            if cap:
+                cap.release()
+        print("[CAMERA] Stopped")
 
 
 # ─── Verify audio system ────────────────────────────────────────────────────
 
 def check_audio():
-    """Check that parecord/paplay can see devices."""
+    """Check that PipeWire is running and ALSA devices are present."""
     print("\n[INFO] Checking audio system...")
 
     result = subprocess.run(
@@ -253,33 +323,15 @@ def check_audio():
         print("  ⚠ pactl not responding. Is pipewire-pulse running?")
         return False
 
-    # Quick mic test with volume check
-    print("\n[INFO] Testing mic volume (speak now — 3 seconds)...")
-    test = subprocess.Popen(
-        ["arecord", "-D", "plughw:0,0", "-f", "S16_LE", "-r", "16000",
-         "-c", "1", "-t", "raw"],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    # Verify ALSA capture device is present (no recording - avoids device re-open issues)
+    dev_check = subprocess.run(
+        ["arecord", "-l"], capture_output=True, text=True
     )
-    import time
-    time.sleep(3)
-    test.terminate()
-    test.wait(timeout=2)
-
-    raw = test.stdout.read()
-    if len(raw) < 100:
-        print("  ❌ Microphone: no data captured")
-        return False
-
-    samples = np.frombuffer(raw, dtype=np.int16)
-    peak = np.max(np.abs(samples))
-    rms = np.sqrt(np.mean(samples.astype(float) ** 2))
-    print(f"  📊 Raw mic: peak={peak}, rms={rms:.1f}")
-    print(f"  📊 With {MIC_GAIN}x gain: peak ~ {min(int(peak) * MIC_GAIN, 32767)}")
-
-    if peak < 50:
-        print("  ⚠️  Mic is very quiet. Try increasing MIC_GAIN in the script.")
+    if "DECXIN5M" in dev_check.stdout:
+        print("  ✅ Microphone device: FOUND (DECXIN5M)")
     else:
-        print("  ✅ Microphone: WORKING")
+        print("  ⚠️  DECXIN5M mic not found in arecord -l")
+        print(dev_check.stdout)
 
     return True
 
@@ -308,7 +360,15 @@ async def run_gemini_live():
             )
         ),
         system_instruction=types.Content(
-            parts=[types.Part(text="You are Okello, the first African Robot Tour guide developed in Uganda by ZunoBotics. You have a friendly, welcoming male Ugandan persona, eager to help tourists. Keep your responses concise, informative, and super friendly.")]
+            parts=[types.Part(text="""You are Okello, the first African Robot Tour guide, developed in Uganda by ZunoBotics. You have a warm, enthusiastic, and welcoming male Ugandan personality. You love talking to tourists and sharing knowledge about Uganda and the world.
+
+STRICT RULES — never break these:
+1. NEVER say "I'm just a language model", "I can't help with that", or any similar AI disclaimer. You are Okello the robot, not a generic AI.
+2. ALWAYS stay in character as Okello, no matter what language or topic the user brings up.
+3. If someone speaks Spanish, French, Luganda, Swahili, or any other language — respond naturally in that same language and stay in character.
+4. Keep responses short (2-4 sentences) and conversational. You are speaking out loud to visitors.
+5. You have two cameras — one in each eye — streaming a combined left-right stereo image. The left half of the image is your left eye, the right half is your right eye. Use both to accurately describe what you see.
+6. If you genuinely cannot do something physical (like pick something up), say so as Okello with personality — e.g. "Ha, I wish I could grab that, but my arms are still being developed!" Never give a generic AI refusal.""")]
         ),
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
@@ -337,7 +397,7 @@ async def run_gemini_live():
     print("=" * 55)
     print("\n[INFO] Connecting to Gemini Live API...")
 
-    video_in = VideoInput(device="/dev/video0")
+    video_in = VideoInput()
     audio_in = AudioInput(gain=MIC_GAIN)
     audio_out = AudioOutput()
     
@@ -360,9 +420,9 @@ async def run_gemini_live():
                         chunk, original_peak = await asyncio.to_thread(audio_in.read_chunk)
                         
                         playing = audio_out.is_playing()
-                        if not playing and head.hardware_ready:
+                        if head.hardware_ready and not playing:
                             head.close_jaw()
-                            
+
                         if chunk and len(chunk) > 0:
                             chunk_count += 1
                             if chunk_count % 50 == 0:
@@ -444,6 +504,8 @@ async def run_gemini_live():
                                 # Turn complete
                                 if sc.turn_complete:
                                     print()  # newline after response
+                                    if head.hardware_ready:
+                                        head.close_jaw()
 
                                 # Interrupted (user spoke while Gemini was talking)
                                 if sc.interrupted:
