@@ -16,7 +16,7 @@ android {
 
     defaultConfig {
         applicationId "com.okello.robot.head"
-        minSdk 29          // Android 10 — Pico 4 ships with Android 10
+        minSdk 29          // Android 10 — Quest 3 runs Android 10+
         targetSdk 34
         versionCode 1
         versionName "1.0.0"
@@ -42,7 +42,7 @@ android {
 dependencies {
     // WebSocket (Gemini Live uses raw WS)
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    // Java-WebSocket — alternative WS client (OkHttp binary frames broken on Android 10 / Pico OS)
+    // Java-WebSocket — OkHttp silently drops binary WebSocket frames on Android 10
     implementation 'org.java-websocket:Java-WebSocket:1.5.4'
 
     // CameraX

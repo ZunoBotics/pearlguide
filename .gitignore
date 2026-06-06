@@ -1,12 +1,11 @@
 # Android build outputs
-PicoHeadApp/.gradle/
-PicoHeadApp/app/build/
-PicoHeadApp/build/
-PicoHeadApp/local.properties
+QuestHeadApp/.gradle/
+QuestHeadApp/app/build/
+QuestHeadApp/build/
+QuestHeadApp/local.properties
 
 # Other project dirs not ready for commit
 OkelloMobileApp/
-QuestHeadApp/
 Robot_Head/
 
 # Office temp files
