@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- Camera preview — COMPATIBLE mode uses TextureView which renders in Quest 3 VR panels -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/cameraPreview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:implementationMode="compatible"
+        android:visibility="visible" />
+
+    <!-- Stereo depth map (top-right corner, semi-transparent) -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <ImageView
+            android:id="@+id/depthMapView"
+            android:layout_width="192dp"
+            android:layout_height="144dp"
+            android:scaleType="fitXY"
+            android:visibility="gone"
+            android:background="#40000000"
+            android:contentDescription="Stereo depth map" />
+
+        <TextView
+            android:id="@+id/nearestText"
+            android:layout_width="192dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#FFFF66"
+            android:textSize="13sp"
+            android:gravity="center"
+            android:background="#80000000"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+    <!-- Status overlay (bottom) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:background="#80000000">
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Starting Gemini Live..."
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:gravity="center" />
+
+        <TextView
+            android:id="@+id/transcriptText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#BBBBBB"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:maxLines="3"
+            android:ellipsize="start"
+            android:paddingTop="8dp" />
+
+    </LinearLayout>
+
+</FrameLayout>

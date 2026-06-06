@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Network -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
+    <!-- Audio -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- Camera — standard Android + Quest 3 passthrough API -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="horizonos.permission.HEADSET_CAMERA" />
+
+    <!-- Wake lock — keep CPU alive when display is off -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Boot & foreground service -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Android 14 (Quest 3 / API 34) requires explicit foreground service type permissions -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
+    <!-- Camera hardware not strictly required — falls back to audio-only if unavailable -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="true" />
+    <!-- Quest 3 Passthrough Camera API -->
+    <uses-feature android:name="com.oculus.feature.PASSTHROUGH" android:required="true" />
+
+    <application
+        android:name=".RobotApplication"
+        android:allowBackup="false"
+        android:label="Okello Robot"
+        android:theme="@style/Theme.AppCompat.NoActionBar"
+        android:screenOrientation="landscape">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Gemini Live foreground service (mic + camera) -->
+        <service
+            android:name=".gemini.GeminiLiveService"
+            android:foregroundServiceType="microphone|camera"
+            android:exported="false" />
+
+        <!-- Auto-start on boot -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+</manifest>

@@ -1,0 +1,16 @@
+# Android build outputs
+PicoHeadApp/.gradle/
+PicoHeadApp/app/build/
+PicoHeadApp/build/
+PicoHeadApp/local.properties
+
+# Other project dirs not ready for commit
+OkelloMobileApp/
+QuestHeadApp/
+Robot_Head/
+
+# Office temp files
+~$*
+
+# macOS
+.DS_Store

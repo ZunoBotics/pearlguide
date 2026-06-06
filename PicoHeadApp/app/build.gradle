@@ -1,0 +1,66 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// Load local.properties for API key injection
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+
+android {
+    namespace 'com.okello.robot.head'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.okello.robot.head"
+        minSdk 29          // Android 10 — Pico 4 ships with Android 10
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+
+        // API key injected at build time from local.properties
+        buildConfigField "String", "GEMINI_API_KEY", "\"${localProps.getProperty('GEMINI_API_KEY', '')}\""
+    }
+
+    buildFeatures {
+        buildConfig true
+        viewBinding true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    // WebSocket (Gemini Live uses raw WS)
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    // Java-WebSocket — alternative WS client (OkHttp binary frames broken on Android 10 / Pico OS)
+    implementation 'org.java-websocket:Java-WebSocket:1.5.4'
+
+    // CameraX
+    def camerax_version = "1.4.1"
+    implementation "androidx.camera:camera-core:$camerax_version"
+    implementation "androidx.camera:camera-camera2:$camerax_version"
+    implementation "androidx.camera:camera-lifecycle:$camerax_version"
+    implementation "androidx.camera:camera-view:$camerax_version"
+
+    // Coroutines
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+
+    // JSON
+    implementation 'org.json:json:20231013'
+
+    // Lifecycle
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+    implementation 'androidx.lifecycle:lifecycle-service:2.7.0'
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+}
