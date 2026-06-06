@@ -4,8 +4,14 @@ QuestHeadApp/app/build/
 QuestHeadApp/build/
 QuestHeadApp/local.properties
 
+# OkelloMobileApp build outputs and secrets
+OkelloMobileApp/.gradle/
+OkelloMobileApp/app/build/
+OkelloMobileApp/build/
+OkelloMobileApp/local.properties
+OkelloMobileApp/.idea/
+
 # Other project dirs not ready for commit
-OkelloMobileApp/
 Robot_Head/
 
 # Office temp files

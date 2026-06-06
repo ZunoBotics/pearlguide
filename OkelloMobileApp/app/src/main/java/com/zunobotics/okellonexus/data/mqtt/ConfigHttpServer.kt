@@ -1,0 +1,106 @@
+package com.zunobotics.okellonexus.data.mqtt
+
+import android.util.Log
+import com.zunobotics.okellonexus.data.repository.KnowledgeRepository
+import com.zunobotics.okellonexus.data.repository.LocationRepository
+import com.zunobotics.okellonexus.data.repository.PersonaRepository
+import com.zunobotics.okellonexus.data.repository.SettingsRepository
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import java.net.ServerSocket
+import javax.inject.Inject
+import javax.inject.Singleton
+
+private const val TAG = "ConfigHttpServer"
+
+@Singleton
+class ConfigHttpServer @Inject constructor(
+    private val personaRepo: PersonaRepository,
+    private val locationRepo: LocationRepository,
+    private val settingsRepo: SettingsRepository,
+    private val knowledgeRepo: KnowledgeRepository
+) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var serverSocket: ServerSocket? = null
+
+    fun start(port: Int = 8080) {
+        scope.launch {
+            try {
+                serverSocket = ServerSocket(port).also { it.reuseAddress = true }
+                Log.i(TAG, "Config HTTP server listening on :$port")
+                while (isActive) {
+                    val socket = serverSocket!!.accept()
+                    launch {
+                        try {
+                            // Drain request headers
+                            val reader = socket.getInputStream().bufferedReader()
+                            var line = reader.readLine()
+                            while (!line.isNullOrBlank()) line = reader.readLine()
+
+                            val json = buildConfigJson()
+                            val body = json.toByteArray(Charsets.UTF_8)
+                            val header = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n"
+                            socket.getOutputStream().write(header.toByteArray())
+                            socket.getOutputStream().write(body)
+                            socket.getOutputStream().flush()
+                        } catch (e: Exception) {
+                            Log.d(TAG, "Request error: ${e.message}")
+                        } finally {
+                            socket.close()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                if (scope.isActive) Log.e(TAG, "Server error: ${e.message}")
+            }
+        }
+    }
+
+    fun stop() {
+        scope.cancel()
+        try { serverSocket?.close() } catch (_: Exception) {}
+    }
+
+    private suspend fun buildConfigJson(): String {
+        val persona = personaRepo.getActive()
+        val location = locationRepo.getActive()
+        val settings = settingsRepo.settings.first()
+
+        val tags: List<String> = try {
+            Json.decodeFromString(persona?.personality ?: "[]")
+        } catch (_: Exception) { emptyList() }
+
+        val languages = settings.selectedLanguages.split(",").filter { it.isNotBlank() }
+
+        val personaId = persona?.id ?: ""
+        val knowledge = if (personaId.isBlank()) knowledgeRepo.getAll()
+                        else knowledgeRepo.getByPersona(personaId)
+
+        val factsArray = JsonArray(knowledge.map { f ->
+            buildJsonObject {
+                put("id", f.id); put("title", f.title)
+                put("content", f.content); put("category", f.category)
+            }
+        })
+
+        return buildJsonObject {
+            put("personaName", persona?.name ?: "")
+            put("role", persona?.role ?: "")
+            put("greeting", persona?.greeting ?: "")
+            put("personality", Json.encodeToString(tags))
+            put("extraInstructions", persona?.extraInstructions ?: "")
+            put("languages", Json.encodeToString(languages))
+            put("codeSwitching", settings.codeSwitching)
+            put("locationName", location?.name ?: "")
+            put("locationDescription", location?.description ?: "")
+            put("locationOpeningHours", location?.openingHours ?: "")
+            put("locationSpecialInstructions", location?.specialInstructions ?: "")
+            put("facts", factsArray)
+        }.toString()
+    }
+}
