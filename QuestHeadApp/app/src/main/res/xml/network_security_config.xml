@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow plain HTTP to any local IP (config polling, MQTT) -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
