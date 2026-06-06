@@ -1,6 +1,6 @@
 # QuestHeadApp — Okello Robot Head Unit (Meta Quest 3)
 
-Android application that turns a Meta Quest 3 into the head unit of the Okello humanoid robot. Okello is an AI marketing assistant for **Zentara Holdings Company Ltd**, powered by Google Gemini Live for real-time voice conversation and stereo computer vision. Configuration (persona, knowledge base, deployment location) is pushed from the **OkelloNexus** companion phone app over Wi-Fi.
+Android application that turns a Meta Quest 3 into the head unit of the Okello humanoid robot. Powered by Google Gemini Live for real-time voice conversation and stereo computer vision. The robot's identity, role, knowledge base, and deployment location are fully configurable via the **OkelloNexus** companion phone app — Okello can be deployed as any persona in any venue without touching the code.
 
 ---
 
