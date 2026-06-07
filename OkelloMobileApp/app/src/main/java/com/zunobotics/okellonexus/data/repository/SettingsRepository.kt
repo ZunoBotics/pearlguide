@@ -22,6 +22,7 @@ object AppPrefsKeys {
     val SELECTED_LANGUAGES = stringPreferencesKey("selected_languages")
     val CODE_SWITCHING = booleanPreferencesKey("code_switching")
     val PENDING_COMMAND = stringPreferencesKey("pending_command")
+    val LEARNING_MODE = booleanPreferencesKey("learning_mode")
 }
 
 data class AppSettings(
@@ -36,7 +37,8 @@ data class AppSettings(
     val activeLocationId: String = "",
     val selectedLanguages: String = "en",
     val codeSwitching: Boolean = false,
-    val pendingCommand: String = ""
+    val pendingCommand: String = "",
+    val learningMode: Boolean = false
 )
 
 @Singleton
@@ -58,7 +60,8 @@ class SettingsRepository @Inject constructor(
                 activeLocationId = prefs[AppPrefsKeys.ACTIVE_LOCATION_ID] ?: "",
                 selectedLanguages = prefs[AppPrefsKeys.SELECTED_LANGUAGES] ?: "en",
                 codeSwitching = prefs[AppPrefsKeys.CODE_SWITCHING] ?: false,
-                pendingCommand = prefs[AppPrefsKeys.PENDING_COMMAND] ?: ""
+                pendingCommand = prefs[AppPrefsKeys.PENDING_COMMAND] ?: "",
+                learningMode = prefs[AppPrefsKeys.LEARNING_MODE] ?: false
             )
         }
 
@@ -82,5 +85,9 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setCommand(command: String) {
         dataStore.edit { it[AppPrefsKeys.PENDING_COMMAND] = command }
+    }
+
+    suspend fun setLearningMode(enabled: Boolean) {
+        dataStore.edit { it[AppPrefsKeys.LEARNING_MODE] = enabled }
     }
 }

@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.zunobotics.okellonexus.ui.screens.command.CommandScreen
+import com.zunobotics.okellonexus.ui.screens.learning.LearningModeScreen
 import com.zunobotics.okellonexus.ui.screens.connect.ConnectScreen
 import com.zunobotics.okellonexus.ui.screens.home.HomeScreen
 import com.zunobotics.okellonexus.ui.screens.knowledge.AddFactScreen
@@ -48,7 +49,8 @@ fun NexusNavGraph(navController: NavHostController) {
                 onNavigateLanguage = { navController.navigate(Screen.Language.route) },
                 onNavigateSettings = { navController.navigate(Screen.Settings.route) },
                 onNavigateSafety = { navController.navigate(Screen.Safety.route) },
-                onNavigatePeople = { navController.navigate(Screen.People.route) }
+                onNavigatePeople = { navController.navigate(Screen.People.route) },
+                onNavigateLearning = { navController.navigate(Screen.LearningMode.route) }
             )
         }
         composable(Screen.Persona.route) {
@@ -110,6 +112,7 @@ fun NexusNavGraph(navController: NavHostController) {
                 onBack = { navController.popBackStack() }
             )
         }
+        composable(Screen.LearningMode.route) { LearningModeScreen(onBack = { navController.popBackStack() }) }
         composable(Screen.Command.route) { CommandScreen(onBack = { navController.popBackStack() }) }
         composable(Screen.Monitor.route) { MonitorScreen(onBack = { navController.popBackStack() }) }
         composable(Screen.Settings.route) { SettingsScreen(onBack = { navController.popBackStack() }) }

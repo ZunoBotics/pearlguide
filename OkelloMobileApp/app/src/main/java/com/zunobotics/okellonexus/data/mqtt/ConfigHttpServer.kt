@@ -1,6 +1,7 @@
 package com.zunobotics.okellonexus.data.mqtt
 
 import android.util.Log
+import com.zunobotics.okellonexus.data.db.entity.KnowledgeEntry
 import com.zunobotics.okellonexus.data.repository.FaceProfileRepository
 import com.zunobotics.okellonexus.data.repository.KnowledgeRepository
 import com.zunobotics.okellonexus.data.repository.LocationRepository
@@ -13,7 +14,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.json.JSONObject
 import java.net.ServerSocket
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,17 +42,33 @@ class ConfigHttpServer @Inject constructor(
                     val socket = serverSocket!!.accept()
                     launch {
                         try {
-                            // Drain request headers
                             val reader = socket.getInputStream().bufferedReader()
-                            var line = reader.readLine()
-                            while (!line.isNullOrBlank()) line = reader.readLine()
+                            val firstLine = reader.readLine() ?: ""
+                            val parts = firstLine.split(" ")
+                            val method = parts.getOrElse(0) { "GET" }
+                            val path = parts.getOrElse(1) { "/config" }
 
-                            val json = buildConfigJson()
-                            val body = json.toByteArray(Charsets.UTF_8)
-                            val header = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n"
-                            socket.getOutputStream().write(header.toByteArray())
-                            socket.getOutputStream().write(body)
-                            socket.getOutputStream().flush()
+                            var contentLength = 0
+                            var headerLine = reader.readLine()
+                            while (!headerLine.isNullOrBlank()) {
+                                if (headerLine.startsWith("Content-Length:", ignoreCase = true))
+                                    contentLength = headerLine.substringAfter(":").trim().toIntOrNull() ?: 0
+                                headerLine = reader.readLine()
+                            }
+
+                            val out = socket.getOutputStream()
+                            if (method == "POST" && path.startsWith("/knowledge") && contentLength > 0) {
+                                val buf = CharArray(contentLength)
+                                reader.read(buf, 0, contentLength)
+                                handlePostKnowledge(String(buf))
+                                out.write("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n".toByteArray())
+                            } else {
+                                val json = buildConfigJson()
+                                val body = json.toByteArray(Charsets.UTF_8)
+                                out.write("HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                                out.write(body)
+                            }
+                            out.flush()
                         } catch (e: Exception) {
                             Log.d(TAG, "Request error: ${e.message}")
                         } finally {
@@ -66,6 +85,25 @@ class ConfigHttpServer @Inject constructor(
     fun stop() {
         scope.cancel()
         try { serverSocket?.close() } catch (_: Exception) {}
+    }
+
+    private suspend fun handlePostKnowledge(body: String) {
+        try {
+            val j = JSONObject(body)
+            val entry = KnowledgeEntry(
+                id = UUID.randomUUID().toString(),
+                title = j.optString("title"),
+                content = j.optString("content"),
+                category = j.optString("category", "taught"),
+                personaId = j.optString("personaId"),
+                locationId = j.optString("locationId").ifBlank { null },
+                source = "taught"
+            )
+            knowledgeRepo.add(entry)
+            Log.i(TAG, "Quest taught new fact: ${entry.title}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save taught fact: ${e.message}")
+        }
     }
 
     private suspend fun buildConfigJson(): String {
@@ -116,6 +154,7 @@ class ConfigHttpServer @Inject constructor(
             put("facts", factsArray)
             put("people", peopleArray)
             put("pendingCommand", settings.pendingCommand)
+            put("learningMode", settings.learningMode)
         }.toString()
     }
 }

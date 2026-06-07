@@ -18,6 +18,7 @@ sealed class Screen(val route: String) {
     object AddFact : Screen("add_fact?personaId={personaId}") {
         fun route(personaId: String = "") = "add_fact?personaId=$personaId"
     }
+    object LearningMode : Screen("learning_mode")
     object Command : Screen("command")
     object Monitor : Screen("monitor")
     object Settings : Screen("settings")

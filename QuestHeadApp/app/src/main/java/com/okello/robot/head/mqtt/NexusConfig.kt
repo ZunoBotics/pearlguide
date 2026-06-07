@@ -14,7 +14,8 @@ data class NexusConfig(
     val locationOpeningHours: String = "",
     val locationSpecialInstructions: String = "",
     val pendingCommand: String = "",
-    val enrolledPeople: List<EnrolledPerson> = emptyList()
+    val enrolledPeople: List<EnrolledPerson> = emptyList(),
+    val learningMode: Boolean = false
 )
 
 data class EnrolledPerson(

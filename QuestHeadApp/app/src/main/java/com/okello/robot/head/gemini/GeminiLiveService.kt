@@ -13,17 +13,19 @@ import com.okello.robot.head.audio.AudioInputManager
 import com.okello.robot.head.audio.AudioOutputManager
 import com.okello.robot.head.mqtt.NexusConfig
 import kotlinx.coroutines.*
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 private const val TAG = "GeminiLiveService"
 private const val NOTIF_CHANNEL = "robot_service"
 private const val NOTIF_ID = 1
 
-// Hardcoded fallback — used until the phone app sends a persona
 private const val DEFAULT_PERSONA_NAME = "Okello"
-private const val DEFAULT_ROLE = "AI marketing assistant for Zentara Holdings Company Ltd"
+private const val DEFAULT_ROLE = "AI assistant and robot guide"
 private const val BASE_RULES = """
 
 STRICT RULES — never break these:
@@ -51,7 +53,11 @@ class GeminiLiveService : Service() {
     private var collectJob: Job? = null
     private var reconnectBackoffMs = 3000L
 
-    private var currentPrompt = ""  // empty → first config always triggers reconnect
+    private var currentPrompt = ""
+    private var currentLearningMode = false
+    private var phoneIp = "192.168.49.1"
+
+    private val factBuffer = StringBuilder()
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -78,10 +84,15 @@ class GeminiLiveService : Service() {
     fun updateConfig(config: NexusConfig) {
         if (config.pendingCommand.isNotEmpty()) handleCommand(config.pendingCommand)
 
+        phoneIp = getSharedPreferences("nexus", MODE_PRIVATE).getString("broker_ip", "192.168.49.1") ?: "192.168.49.1"
+
         val newPrompt = buildSystemPrompt(config)
-        if (newPrompt == currentPrompt) return
-        Log.i(TAG, "Config updated — reloading Gemini (persona=${config.personaName})")
+        val modeChanged = config.learningMode != currentLearningMode
+        if (newPrompt == currentPrompt && !modeChanged) return
+        Log.i(TAG, "Config updated — reloading Gemini (persona=${config.personaName}, learning=${config.learningMode})")
         currentPrompt = newPrompt
+        currentLearningMode = config.learningMode
+        factBuffer.clear()
         scope.launch { reconnectWithPrompt(newPrompt) }
     }
 
@@ -112,6 +123,37 @@ class GeminiLiveService : Service() {
 
     fun sendVideoFrame(base64Jpeg: String) = geminiClient.sendVideo(base64Jpeg)
 
+    private fun checkForSaveFact(text: String) {
+        factBuffer.append(text)
+        val raw = factBuffer.toString()
+        val start = raw.indexOf("[[SAVE_FACT:")
+        val end = raw.indexOf("]]", start + 1)
+        if (start >= 0 && end > start) {
+            val json = raw.substring(start + 12, end)
+            factBuffer.clear()
+            scope.launch(Dispatchers.IO) { postFact(json) }
+        } else if (raw.length > 2000) {
+            factBuffer.clear()
+        }
+    }
+
+    private fun postFact(json: String) {
+        try {
+            val j = JSONObject(json)
+            val body = j.toString().toRequestBody("application/json".toMediaType())
+            val resp = OkHttpClient().newCall(
+                Request.Builder()
+                    .url("http://$phoneIp:8080/knowledge")
+                    .post(body)
+                    .build()
+            ).execute()
+            Log.i(TAG, "Fact posted → ${resp.code}: ${j.optString("title")}")
+            resp.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "postFact failed: ${e.message}")
+        }
+    }
+
     // ─── Init / Connect ───────────────────────────────────────────────────────
 
     private fun initAndConnect() {
@@ -139,6 +181,7 @@ class GeminiLiveService : Service() {
                 is GeminiEvent.TextChunk   -> {
                     Log.d(TAG, "Gemini: ${event.text}")
                     statusCallback?.invoke(event.text)
+                    if (currentLearningMode) checkForSaveFact(event.text)
                 }
                 is GeminiEvent.TurnComplete -> statusCallback?.invoke("Listening…")
                 is GeminiEvent.Interrupted  -> audioOut.flush()
@@ -171,6 +214,25 @@ class GeminiLiveService : Service() {
     private fun buildSystemPrompt(config: NexusConfig): String = buildString {
         val name = config.personaName.ifBlank { DEFAULT_PERSONA_NAME }
         val role = config.role.ifBlank { DEFAULT_ROLE }
+
+        if (config.learningMode) {
+            appendLine("You are $name, $role. You are currently in LEARNING MODE.")
+            appendLine("""
+LEARNING MODE INSTRUCTIONS:
+- A specialist trainer is teaching you about objects, exhibits, or products in this space.
+- When you start or resume, say: "I'm ready to learn. Point me at something and tell me about it."
+- Each time the trainer describes something, repeat back a concise summary and ask: "Shall I save this to my knowledge base?"
+- If they confirm (say yes/save/correct/add), output this EXACT format on its own line:
+  [[SAVE_FACT:{"title":"<short title>","content":"<full trainer description>","category":"taught"}]]
+  Then say: "Saved! Ready for the next one?"
+- If the trainer says "what do you see?" or asks your opinion, describe what you observe naturally,
+  then ask "Does that match what you want me to learn?" — but NEVER auto-save your own description.
+- If they correct you, acknowledge and use their version when saving.
+- NEVER hallucinate or add facts the trainer didn't say.
+- NEVER skip the confirmation step before outputting [[SAVE_FACT:...]].
+""".trimIndent())
+            return@buildString
+        }
 
         appendLine("You are $name, $role.")
 

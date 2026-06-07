@@ -29,6 +29,7 @@ fun HomeScreen(
     onNavigateSettings: () -> Unit,
     onNavigateSafety: () -> Unit,
     onNavigatePeople: () -> Unit,
+    onNavigateLearning: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.connectionState.collectAsState()
@@ -215,6 +216,17 @@ fun HomeScreen(
                         Spacer(Modifier.width(6.dp))
                         Text("Monitor")
                     }
+                }
+            }
+
+            item {
+                OutlinedButton(
+                    onClick = onNavigateLearning,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Teaching Mode")
                 }
             }
 
