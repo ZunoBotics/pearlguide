@@ -9,8 +9,14 @@ import com.zunobotics.okellonexus.data.repository.KnowledgeRepository
 import com.zunobotics.okellonexus.data.repository.LocationRepository
 import com.zunobotics.okellonexus.data.repository.MqttRepository
 import com.zunobotics.okellonexus.data.repository.PersonaRepository
+import com.zunobotics.okellonexus.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 import javax.inject.Inject
@@ -20,7 +26,8 @@ class HomeViewModel @Inject constructor(
     private val mqttRepo: MqttRepository,
     private val knowledgeRepo: KnowledgeRepository,
     private val personaRepo: PersonaRepository,
-    private val locationRepo: LocationRepository
+    private val locationRepo: LocationRepository,
+    private val settingsRepo: SettingsRepository
 ) : ViewModel() {
 
     val connectionState: StateFlow<RobotConnectionState> = mqttRepo.connectionState
@@ -30,6 +37,10 @@ class HomeViewModel @Inject constructor(
 
     val knowledgeCount: StateFlow<Int> = knowledgeRepo.count
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), 0)
+
+    val learningMode: StateFlow<Boolean> = settingsRepo.settings
+        .map { it.learningMode }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     val activePersonaName: StateFlow<String> = personaRepo.activePersona
         .map { it?.name ?: "" }

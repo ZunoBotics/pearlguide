@@ -117,8 +117,10 @@ class GeminiLiveClient(
 
     fun disconnect() {
         setupDone.set(false)
+        // Close the channel FIRST so onClose/onError callbacks can't enqueue error events
+        // after we've intentionally disconnected (server echoes our close → remote=true → error).
+        if (!events.isClosedForSend) events.close()
         try { wsClient?.close() } catch (_: Exception) {}
         wsClient = null
-        if (!events.isClosedForSend) events.close()
     }
 }

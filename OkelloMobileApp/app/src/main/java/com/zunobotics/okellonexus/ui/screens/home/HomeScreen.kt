@@ -38,6 +38,7 @@ fun HomeScreen(
     val activityLog by viewModel.activityLog.collectAsState()
     val activePersonaName by viewModel.activePersonaName.collectAsState()
     val activeLocationName by viewModel.activeLocationName.collectAsState()
+    val learningMode by viewModel.learningMode.collectAsState()
 
     Scaffold(
         topBar = {
@@ -105,6 +106,32 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(vertical = 16.dp)
         ) {
+            // Learning mode active banner
+            if (learningMode) {
+                item {
+                    Surface(
+                        onClick = onNavigateLearning,
+                        color = SuccessTeal.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SuccessTeal.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(Icons.Default.School, contentDescription = null, tint = SuccessTeal, modifier = Modifier.size(20.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Teaching Mode Active", style = MaterialTheme.typography.labelLarge, color = SuccessTeal, fontWeight = FontWeight.Bold)
+                                Text("Robot is in learning mode — tap to manage", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                            }
+                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = SuccessTeal)
+                        }
+                    }
+                }
+            }
+
             // Status card
             item {
                 Card(

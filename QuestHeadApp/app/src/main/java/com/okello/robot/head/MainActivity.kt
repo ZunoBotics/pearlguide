@@ -11,9 +11,11 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.net.Uri
 import android.os.Bundle
 import android.os.IBinder
 import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
@@ -51,10 +53,14 @@ class MainActivity : AppCompatActivity() {
     private var proximitySensor: Sensor? = null
     private val proximityListener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
-            // value > 0 means headset removed / sensor uncovered
+            // value > 0 means sensor uncovered (headset not on face)
+            // Only assert screen when it is actually off to avoid hammering the window manager
             if (event.values[0] > 0f) {
-                Log.i(TAG, "Proximity sensor: headset removed — re-asserting screen on")
-                assertScreenOn()
+                val pm = getSystemService(POWER_SERVICE) as PowerManager
+                if (!pm.isInteractive) {
+                    Log.i(TAG, "Screen off detected via proximity — re-asserting screen on")
+                    assertScreenOn()
+                }
             }
         }
         override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit
@@ -86,6 +92,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         acquireWakeLock()
+        tryKeepScreenOn()
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -241,7 +248,23 @@ class MainActivity : AppCompatActivity() {
         wakeLock = pm.newWakeLock(
             PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
             "RobotHead::AlwaysActive"
-        ).apply { acquire() }
+        ).apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    private fun tryKeepScreenOn() {
+        if (Settings.System.canWrite(this)) {
+            Settings.System.putInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, Int.MAX_VALUE)
+            // Quest-specific: disable proximity-based sleep
+            try { Settings.System.putInt(contentResolver, "quest_proximity_sensor_enabled", 0) } catch (_: Exception) {}
+            // Keep awake while plugged in (charging / USB)
+            try { Settings.Global.putInt(contentResolver, Settings.Global.STAY_ON_WHILE_PLUGGED_IN, 3) } catch (_: Exception) {}
+            Log.i(TAG, "Screen-off timeout set to max, proximity sleep disabled")
+        } else {
+            Log.w(TAG, "WRITE_SETTINGS not granted — run: adb shell settings put system screen_off_timeout 2147483647")
+        }
     }
 
     private fun permissionsGranted() = REQUIRED_PERMISSIONS.all {

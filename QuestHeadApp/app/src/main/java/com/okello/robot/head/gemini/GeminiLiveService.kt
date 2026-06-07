@@ -13,6 +13,7 @@ import com.okello.robot.head.audio.AudioInputManager
 import com.okello.robot.head.audio.AudioOutputManager
 import com.okello.robot.head.mqtt.NexusConfig
 import kotlinx.coroutines.*
+import java.util.concurrent.atomic.AtomicBoolean
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -52,6 +53,7 @@ class GeminiLiveService : Service() {
     var statusCallback: ((String) -> Unit)? = null
     private var collectJob: Job? = null
     private var reconnectBackoffMs = 3000L
+    private val reconnecting = AtomicBoolean(false)
 
     private var currentPrompt = ""
     private var currentLearningMode = false
@@ -204,15 +206,20 @@ class GeminiLiveService : Service() {
     }
 
     private suspend fun reconnectWithPrompt(prompt: String, learningMode: Boolean = false) {
-        collectJob?.cancel()
-        audioIn.stop()
-        geminiClient.disconnect()
-        audioOut.flush()
-        delay(500)
-        geminiClient = GeminiLiveClient(BuildConfig.GEMINI_API_KEY, filesDir)
-        geminiClient.connect(prompt, "Charon", learningMode)
-        audioIn.start()
-        collectJob = scope.launch { collectEvents() }
+        if (!reconnecting.compareAndSet(false, true)) return
+        try {
+            collectJob?.cancel()
+            audioIn.stop()
+            geminiClient.disconnect()
+            audioOut.flush()
+            delay(500)
+            geminiClient = GeminiLiveClient(BuildConfig.GEMINI_API_KEY, filesDir)
+            geminiClient.connect(prompt, "Charon", learningMode)
+            audioIn.start()
+            collectJob = scope.launch { collectEvents() }
+        } finally {
+            reconnecting.set(false)
+        }
     }
 
     // ─── Dynamic system prompt builder ────────────────────────────────────────

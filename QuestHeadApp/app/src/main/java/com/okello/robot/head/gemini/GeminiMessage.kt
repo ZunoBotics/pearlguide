@@ -10,16 +10,19 @@ import org.json.JSONObject
 object GeminiMessage {
 
     fun setup(systemPrompt: String, voiceName: String = "Aoede", includeText: Boolean = false): String {
-        val modalities = JSONArray().put("AUDIO").also { if (includeText) it.put("TEXT") }
+        // AUDIO+TEXT combined modalities are not supported by this model.
+        // Use outputAudioTranscription to get text alongside audio instead.
+        val generationConfig = JSONObject()
+            .put("responseModalities", JSONArray().put("AUDIO"))
+            .put("speechConfig", JSONObject()
+                .put("voiceConfig", JSONObject()
+                    .put("prebuiltVoiceConfig", JSONObject()
+                        .put("voiceName", voiceName))))
+        if (includeText) generationConfig.put("outputAudioTranscription", JSONObject())
         return JSONObject().put(
             "setup", JSONObject()
                 .put("model", "models/gemini-3.1-flash-live-preview")
-                .put("generationConfig", JSONObject()
-                    .put("responseModalities", modalities)
-                    .put("speechConfig", JSONObject()
-                        .put("voiceConfig", JSONObject()
-                            .put("prebuiltVoiceConfig", JSONObject()
-                                .put("voiceName", voiceName)))))
+                .put("generationConfig", generationConfig)
                 .put("systemInstruction", JSONObject()
                     .put("parts", JSONArray().put(
                         JSONObject().put("text", systemPrompt))))
@@ -83,6 +86,12 @@ fun parseGeminiMessage(json: String): GeminiEvent? {
 
                 if (content.optBoolean("interrupted")) return GeminiEvent.Interrupted("barge-in")
                 if (content.optBoolean("turnComplete")) return GeminiEvent.TurnComplete
+
+                // outputAudioTranscription: text transcript of the model's audio output
+                content.optJSONObject("outputTranscription")?.let { t ->
+                    val text = t.optString("text")
+                    if (text.isNotEmpty()) return GeminiEvent.TextChunk(text)
+                }
 
                 val parts = content.optJSONObject("modelTurn")
                     ?.optJSONArray("parts") ?: return null

@@ -17,6 +17,8 @@
 
     <!-- Wake lock — keep CPU alive when display is off -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Modify system settings to set screen-off timeout to max -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
 
     <!-- Boot & foreground service -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
