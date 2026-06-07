@@ -1,6 +1,8 @@
 package com.zunobotics.okellonexus.ui.screens.safety
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -14,8 +16,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.zunobotics.okellonexus.data.repository.ObstacleAlert
 import com.zunobotics.okellonexus.ui.components.NexusTopBar
 import com.zunobotics.okellonexus.ui.theme.*
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun SafetyScreen(
@@ -25,6 +31,7 @@ fun SafetyScreen(
     val activeCommand by viewModel.activeCommand.collectAsState()
     val isEmergencyStopped = activeCommand == "emergency_stop"
     val isCallingHelp = activeCommand == "call_human"
+    val obstacleAlerts by viewModel.obstacleAlerts.collectAsState()
 
     Scaffold(
         topBar = {
@@ -175,15 +182,71 @@ fun SafetyScreen(
 
             HorizontalDivider()
 
-            // Alert Log placeholder
             Text("Recent Alerts", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
-            Text(
-                "No alerts received in this session.\nStaircase and obstacle alerts from the Quest will appear here.",
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary
-            )
+
+            if (obstacleAlerts.isEmpty()) {
+                Text(
+                    "No alerts received in this session.\nStaircase and obstacle alerts from the Quest will appear here.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary
+                )
+            } else {
+                obstacleAlerts.take(10).forEach { alert ->
+                    ObstacleAlertCard(alert)
+                }
+            }
 
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun ObstacleAlertCard(alert: ObstacleAlert) {
+    val bg = when (alert.severity) {
+        "danger" -> ErrorRed.copy(alpha = 0.08f)
+        "caution" -> AmberGold.copy(alpha = 0.08f)
+        else -> SurfaceWhite
+    }
+    val accent = when (alert.severity) {
+        "danger" -> ErrorRed
+        "caution" -> AmberGold
+        else -> ElectricBlue
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = bg),
+        shape = RoundedCornerShape(10.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                if (alert.type == "staircase") Icons.Default.Warning else Icons.Default.Report,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(20.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "${alert.type.replaceFirstChar { it.uppercase() }} — ${alert.direction}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    "${alert.distanceCm}cm  ·  ${(alert.confidence * 100).toInt()}% confidence",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary
+                )
+            }
+            Text(
+                SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(alert.timestampMs)),
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary
+            )
         }
     }
 }

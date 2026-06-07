@@ -5,6 +5,8 @@ import com.zunobotics.okellonexus.data.db.entity.KnowledgeEntry
 import com.zunobotics.okellonexus.data.repository.FaceProfileRepository
 import com.zunobotics.okellonexus.data.repository.KnowledgeRepository
 import com.zunobotics.okellonexus.data.repository.LocationRepository
+import com.zunobotics.okellonexus.data.repository.ObstacleAlert
+import com.zunobotics.okellonexus.data.repository.ObstacleAlertRepository
 import com.zunobotics.okellonexus.data.repository.PersonaRepository
 import com.zunobotics.okellonexus.data.repository.SettingsRepository
 import kotlinx.coroutines.*
@@ -28,7 +30,8 @@ class ConfigHttpServer @Inject constructor(
     private val locationRepo: LocationRepository,
     private val settingsRepo: SettingsRepository,
     private val knowledgeRepo: KnowledgeRepository,
-    private val faceProfileRepo: FaceProfileRepository
+    private val faceProfileRepo: FaceProfileRepository,
+    private val obstacleRepo: ObstacleAlertRepository
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var serverSocket: ServerSocket? = null
@@ -57,10 +60,17 @@ class ConfigHttpServer @Inject constructor(
                             }
 
                             val out = socket.getOutputStream()
-                            if (method == "POST" && path.startsWith("/knowledge") && contentLength > 0) {
+                            val bodyText = if (method == "POST" && contentLength > 0) {
                                 val buf = CharArray(contentLength)
                                 reader.read(buf, 0, contentLength)
-                                handlePostKnowledge(String(buf))
+                                String(buf)
+                            } else ""
+
+                            if (method == "POST" && path.startsWith("/knowledge") && bodyText.isNotEmpty()) {
+                                handlePostKnowledge(bodyText)
+                                out.write("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n".toByteArray())
+                            } else if (method == "POST" && path.startsWith("/obstacle_alert") && bodyText.isNotEmpty()) {
+                                handlePostObstacle(bodyText)
                                 out.write("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n".toByteArray())
                             } else {
                                 val json = buildConfigJson()
@@ -85,6 +95,28 @@ class ConfigHttpServer @Inject constructor(
     fun stop() {
         scope.cancel()
         try { serverSocket?.close() } catch (_: Exception) {}
+    }
+
+    private fun handlePostObstacle(body: String) {
+        try {
+            val j = JSONObject(body)
+            val severity = when {
+                j.optInt("distanceCm", 200) < 60 -> "danger"
+                j.optInt("distanceCm", 200) < 100 -> "caution"
+                j.optString("type") == "staircase" -> "danger"
+                else -> "info"
+            }
+            obstacleRepo.push(ObstacleAlert(
+                type = j.optString("type", "obstacle"),
+                direction = j.optString("direction", "forward"),
+                distanceCm = j.optInt("distanceCm", 0),
+                confidence = j.optDouble("confidence", 0.0).toFloat(),
+                severity = severity
+            ))
+            Log.i(TAG, "Obstacle alert: ${j.optString("type")} at ${j.optInt("distanceCm")}cm")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse obstacle alert: ${e.message}")
+        }
     }
 
     private suspend fun handlePostKnowledge(body: String) {
