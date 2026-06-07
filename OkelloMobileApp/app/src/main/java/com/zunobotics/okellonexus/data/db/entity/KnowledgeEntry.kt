@@ -15,6 +15,7 @@ data class KnowledgeEntry(
     val locationSpecific: Boolean = false,
     val source: String = "manual",  // manual, document, taught, voice
     val documentName: String? = null,
+    val imageBase64: String? = null, // camera snapshot captured at teaching time
     val createdAt: Long = System.currentTimeMillis(),
     val syncedAt: Long? = null,
     val deletedAt: Long? = null     // soft delete

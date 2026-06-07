@@ -65,9 +65,15 @@ class ConfigHttpServer @Inject constructor(
 
                             val out = socket.getOutputStream()
                             val bodyText = if (method == "POST" && contentLength > 0) {
+                                // reader.read() may return fewer chars than requested for large bodies
                                 val buf = CharArray(contentLength)
-                                reader.read(buf, 0, contentLength)
-                                String(buf)
+                                var totalRead = 0
+                                while (totalRead < contentLength) {
+                                    val n = reader.read(buf, totalRead, contentLength - totalRead)
+                                    if (n == -1) break
+                                    totalRead += n
+                                }
+                                String(buf, 0, totalRead)
                             } else ""
 
                             if (method == "POST" && path.startsWith("/knowledge") && bodyText.isNotEmpty()) {
@@ -151,6 +157,7 @@ class ConfigHttpServer @Inject constructor(
     private suspend fun handlePostKnowledge(body: String) {
         try {
             val j = JSONObject(body)
+            val imageBase64 = j.optString("imageBase64").ifBlank { null }
             val entry = KnowledgeEntry(
                 id = UUID.randomUUID().toString(),
                 title = j.optString("title"),
@@ -158,7 +165,8 @@ class ConfigHttpServer @Inject constructor(
                 category = j.optString("category", "taught"),
                 personaId = j.optString("personaId"),
                 locationId = j.optString("locationId").ifBlank { null },
-                source = "taught"
+                source = "taught",
+                imageBase64 = imageBase64
             )
             knowledgeRepo.add(entry)
             Log.i(TAG, "Quest taught new fact: ${entry.title}")

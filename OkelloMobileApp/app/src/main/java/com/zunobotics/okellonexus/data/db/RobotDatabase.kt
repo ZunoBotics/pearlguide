@@ -33,9 +33,15 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE knowledge ADD COLUMN imageBase64 TEXT")
+    }
+}
+
 @Database(
     entities = [PersonaEntity::class, LocationEntity::class, KnowledgeEntry::class, CommandHistory::class, FaceProfile::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class RobotDatabase : RoomDatabase() {

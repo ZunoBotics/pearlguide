@@ -1,5 +1,8 @@
 package com.zunobotics.okellonexus.ui.screens.knowledge
 
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -11,6 +14,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.zunobotics.okellonexus.data.db.entity.KnowledgeEntry
@@ -234,6 +239,25 @@ private fun KnowledgeCard(
                 Spacer(Modifier.height(8.dp))
                 Divider(color = BorderColor)
                 Spacer(Modifier.height(8.dp))
+                entry.imageBase64?.let { b64 ->
+                    val bitmap = remember(b64) {
+                        runCatching {
+                            val bytes = Base64.decode(b64, Base64.DEFAULT)
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                        }.getOrNull()
+                    }
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = "Snapshot",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 200.dp)
+                                .padding(bottom = 8.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                }
                 Text(
                     entry.content,
                     style = MaterialTheme.typography.bodyMedium,

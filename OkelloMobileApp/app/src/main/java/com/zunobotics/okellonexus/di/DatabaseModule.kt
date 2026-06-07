@@ -25,7 +25,8 @@ object DatabaseModule {
         Room.databaseBuilder(ctx, RobotDatabase::class.java, "robot_db")
             .addMigrations(
                 com.zunobotics.okellonexus.data.db.MIGRATION_1_2,
-                com.zunobotics.okellonexus.data.db.MIGRATION_2_3
+                com.zunobotics.okellonexus.data.db.MIGRATION_2_3,
+                com.zunobotics.okellonexus.data.db.MIGRATION_3_4
             )
             .build()
 

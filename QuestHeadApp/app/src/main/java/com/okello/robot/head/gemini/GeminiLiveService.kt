@@ -62,6 +62,7 @@ class GeminiLiveService : Service() {
     private var phoneIp = "192.168.49.1"
 
     private val factBuffer = StringBuilder()
+    @Volatile private var lastCameraFrame: String? = null
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -127,7 +128,10 @@ class GeminiLiveService : Service() {
         }
     }
 
-    fun sendVideoFrame(base64Jpeg: String) = geminiClient.sendVideo(base64Jpeg)
+    fun sendVideoFrame(base64Jpeg: String) {
+        lastCameraFrame = base64Jpeg
+        geminiClient.sendVideo(base64Jpeg)
+    }
 
     private fun checkForSaveFact(text: String) {
         factBuffer.append(text)
@@ -148,6 +152,7 @@ class GeminiLiveService : Service() {
             val j = JSONObject(json)
             if (personaId.isNotBlank()) j.put("personaId", personaId)
             if (locationId.isNotBlank()) j.put("locationId", locationId)
+            lastCameraFrame?.let { j.put("imageBase64", it) }
             val body = j.toString().toRequestBody("application/json".toMediaType())
             val resp = OkHttpClient().newCall(
                 Request.Builder()
@@ -187,7 +192,7 @@ class GeminiLiveService : Service() {
                 }
                 is GeminiEvent.AudioChunk  -> audioOut.enqueue(event.pcmBase64)
                 is GeminiEvent.TextChunk   -> {
-                    Log.d(TAG, "Gemini: ${event.text}")
+                    Log.d(TAG, "Gemini text: ${event.text.take(80)}")
                     statusCallback?.invoke(event.text)
                     if (currentLearningMode) checkForSaveFact(event.text)
                 }

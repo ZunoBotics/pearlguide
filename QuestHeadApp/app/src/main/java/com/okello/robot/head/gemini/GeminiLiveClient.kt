@@ -92,12 +92,14 @@ class GeminiLiveClient(
     }
 
     private fun handleMessage(text: String) {
-        val event = parseGeminiMessage(text) ?: return
-        if (event is GeminiEvent.SetupComplete) {
-            setupDone.set(true)
-            flog("SETUP COMPLETE — Gemini Live is READY")
+        val eventList = parseGeminiMessages(text)
+        for (event in eventList) {
+            if (event is GeminiEvent.SetupComplete) {
+                setupDone.set(true)
+                flog("SETUP COMPLETE — Gemini Live is READY")
+            }
+            events.trySendBlocking(event)
         }
-        events.trySendBlocking(event)
     }
 
     fun sendAudio(base64Pcm: String) {
