@@ -87,7 +87,9 @@ class ConfigPoller(
                 knowledgeFacts        = parseFacts(j.optJSONArray("facts")),
                 pendingCommand        = j.optString("pendingCommand"),
                 enrolledPeople        = parsePeople(j.optJSONArray("people")),
-                learningMode          = j.optBoolean("learningMode", false)
+                learningMode          = j.optBoolean("learningMode", false),
+                personaId             = j.optString("personaId"),
+                locationId            = j.optString("locationId")
             )
             onConfigUpdate(config)
         } catch (e: Exception) {

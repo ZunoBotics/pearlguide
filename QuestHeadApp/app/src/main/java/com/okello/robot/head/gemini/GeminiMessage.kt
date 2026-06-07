@@ -9,12 +9,13 @@ import org.json.JSONObject
 
 object GeminiMessage {
 
-    fun setup(systemPrompt: String, voiceName: String = "Aoede"): String =
-        JSONObject().put(
+    fun setup(systemPrompt: String, voiceName: String = "Aoede", includeText: Boolean = false): String {
+        val modalities = JSONArray().put("AUDIO").also { if (includeText) it.put("TEXT") }
+        return JSONObject().put(
             "setup", JSONObject()
                 .put("model", "models/gemini-3.1-flash-live-preview")
                 .put("generationConfig", JSONObject()
-                    .put("responseModalities", JSONArray().put("AUDIO"))
+                    .put("responseModalities", modalities)
                     .put("speechConfig", JSONObject()
                         .put("voiceConfig", JSONObject()
                             .put("prebuiltVoiceConfig", JSONObject()
@@ -27,6 +28,7 @@ object GeminiMessage {
                         .put("disabled", false)
                         .put("silenceDurationMs", 1500)))
         ).toString()
+    }
 
     fun audioChunk(base64Pcm: String): String =
         JSONObject().put(

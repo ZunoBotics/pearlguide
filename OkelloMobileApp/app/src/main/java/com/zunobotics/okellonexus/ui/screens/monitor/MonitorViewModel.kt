@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.zunobotics.okellonexus.data.model.RobotConnectionState
 import com.zunobotics.okellonexus.data.model.RobotStatus
 import com.zunobotics.okellonexus.data.mqtt.IncomingMessage
+import com.zunobotics.okellonexus.data.repository.CameraFrame
+import com.zunobotics.okellonexus.data.repository.CameraStreamRepository
 import com.zunobotics.okellonexus.data.repository.MqttRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -22,10 +24,14 @@ data class MonitorState(
 
 @HiltViewModel
 class MonitorViewModel @Inject constructor(
-    private val mqttRepo: MqttRepository
+    private val mqttRepo: MqttRepository,
+    private val cameraStreamRepo: CameraStreamRepository
 ) : ViewModel() {
 
     val connectionState: StateFlow<RobotConnectionState> = mqttRepo.connectionState
+
+    val cameraFrame: StateFlow<CameraFrame?> = cameraStreamRepo.frame
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _monitorState = MutableStateFlow(MonitorState())
     val monitorState: StateFlow<MonitorState> = _monitorState.asStateFlow()

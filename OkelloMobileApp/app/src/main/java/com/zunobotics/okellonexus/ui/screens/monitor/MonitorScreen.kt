@@ -1,5 +1,8 @@
 package com.zunobotics.okellonexus.ui.screens.monitor
 
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,11 +15,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.zunobotics.okellonexus.data.model.RobotConnectionState
+import com.zunobotics.okellonexus.data.repository.CameraFrame
 import com.zunobotics.okellonexus.ui.components.ConnectionBadge
 import com.zunobotics.okellonexus.ui.components.NexusTopBar
 import com.zunobotics.okellonexus.ui.theme.*
@@ -32,6 +38,7 @@ fun MonitorScreen(
     val connectionState by viewModel.connectionState.collectAsState()
     val monitorState by viewModel.monitorState.collectAsState()
     val eventLog by viewModel.eventLog.collectAsState()
+    val cameraFrame by viewModel.cameraFrame.collectAsState()
 
     Scaffold(
         topBar = {
@@ -88,40 +95,11 @@ fun MonitorScreen(
                 }
             }
 
-            // Camera feed placeholder
+            // Live camera feed
             item {
                 Text("Camera Feed", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
                 Spacer(Modifier.height(8.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                        .background(Color(0xFF1A1A2E), RoundedCornerShape(16.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Videocam,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.4f),
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Text(
-                            if (connectionState == RobotConnectionState.CONNECTED_IDLE ||
-                                connectionState == RobotConnectionState.CONNECTED_ACTIVE)
-                                "Camera feed not available in this build"
-                            else
-                                "Connect to robot to view camera",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.5f),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 24.dp)
-                        )
-                    }
-                }
+                CameraFeedPanel(frame = cameraFrame)
             }
 
             // Status Panel
@@ -232,6 +210,89 @@ fun MonitorScreen(
                         modifier = Modifier.padding(vertical = 2.dp)
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CameraFeedPanel(frame: CameraFrame?) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(4f / 3f)
+            .background(Color(0xFF1A1A2E), RoundedCornerShape(16.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        if (frame != null) {
+            val bitmap = remember(frame.jpegBase64) {
+                try {
+                    val bytes = Base64.decode(frame.jpegBase64, Base64.DEFAULT)
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                } catch (_: Exception) { null }
+            }
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = "Robot camera",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().padding(2.dp)
+                )
+            }
+            // Detection overlay chips
+            if (frame.detections.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    frame.detections.forEach { d ->
+                        val color = if (d.distanceCm < 60) ErrorRed else AmberGold
+                        Surface(
+                            color = color.copy(alpha = 0.85f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                "${d.type} ${d.direction} ${d.distanceCm}cm",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+            // Timestamp
+            Text(
+                SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(frame.receivedAt)),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(8.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White
+            )
+        } else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    Icons.Default.Videocam,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.4f),
+                    modifier = Modifier.size(40.dp)
+                )
+                Text(
+                    "Waiting for camera feed from Quest…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.5f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                )
             }
         }
     }

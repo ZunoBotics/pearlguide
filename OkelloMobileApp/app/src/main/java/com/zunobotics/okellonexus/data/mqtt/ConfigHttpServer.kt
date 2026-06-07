@@ -2,6 +2,9 @@ package com.zunobotics.okellonexus.data.mqtt
 
 import android.util.Log
 import com.zunobotics.okellonexus.data.db.entity.KnowledgeEntry
+import com.zunobotics.okellonexus.data.repository.CameraDetection
+import com.zunobotics.okellonexus.data.repository.CameraFrame
+import com.zunobotics.okellonexus.data.repository.CameraStreamRepository
 import com.zunobotics.okellonexus.data.repository.FaceProfileRepository
 import com.zunobotics.okellonexus.data.repository.KnowledgeRepository
 import com.zunobotics.okellonexus.data.repository.LocationRepository
@@ -31,7 +34,8 @@ class ConfigHttpServer @Inject constructor(
     private val settingsRepo: SettingsRepository,
     private val knowledgeRepo: KnowledgeRepository,
     private val faceProfileRepo: FaceProfileRepository,
-    private val obstacleRepo: ObstacleAlertRepository
+    private val obstacleRepo: ObstacleAlertRepository,
+    private val cameraStreamRepo: CameraStreamRepository
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var serverSocket: ServerSocket? = null
@@ -72,6 +76,9 @@ class ConfigHttpServer @Inject constructor(
                             } else if (method == "POST" && path.startsWith("/obstacle_alert") && bodyText.isNotEmpty()) {
                                 handlePostObstacle(bodyText)
                                 out.write("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n".toByteArray())
+                            } else if (method == "POST" && path.startsWith("/camera_frame") && bodyText.isNotEmpty()) {
+                                handlePostCameraFrame(bodyText)
+                                out.write("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n".toByteArray())
                             } else {
                                 val json = buildConfigJson()
                                 val body = json.toByteArray(Charsets.UTF_8)
@@ -95,6 +102,28 @@ class ConfigHttpServer @Inject constructor(
     fun stop() {
         scope.cancel()
         try { serverSocket?.close() } catch (_: Exception) {}
+    }
+
+    private fun handlePostCameraFrame(body: String) {
+        try {
+            val j = JSONObject(body)
+            val jpeg = j.optString("jpeg")
+            if (jpeg.isBlank()) return
+            val detectionsArr = j.optJSONArray("detections")
+            val detections = if (detectionsArr != null) {
+                (0 until detectionsArr.length()).map { i ->
+                    val d = detectionsArr.getJSONObject(i)
+                    CameraDetection(
+                        type = d.optString("type", "obstacle"),
+                        direction = d.optString("direction", "forward"),
+                        distanceCm = d.optInt("distanceCm", 0)
+                    )
+                }
+            } else emptyList()
+            cameraStreamRepo.push(CameraFrame(jpegBase64 = jpeg, detections = detections))
+        } catch (e: Exception) {
+            Log.d(TAG, "camera_frame parse error: ${e.message}")
+        }
     }
 
     private fun handlePostObstacle(body: String) {
@@ -173,6 +202,7 @@ class ConfigHttpServer @Inject constructor(
 
         return buildJsonObject {
             put("personaName", persona?.name ?: "")
+            put("personaId", personaId)
             put("role", persona?.role ?: "")
             put("greeting", persona?.greeting ?: "")
             put("personality", Json.encodeToString(tags))
@@ -180,6 +210,7 @@ class ConfigHttpServer @Inject constructor(
             put("languages", Json.encodeToString(languages))
             put("codeSwitching", settings.codeSwitching)
             put("locationName", location?.name ?: "")
+            put("locationId", location?.id ?: "")
             put("locationDescription", location?.description ?: "")
             put("locationOpeningHours", location?.openingHours ?: "")
             put("locationSpecialInstructions", location?.specialInstructions ?: "")

@@ -35,15 +35,15 @@ class GeminiLiveClient(
     val events = Channel<GeminiEvent>(capacity = 256)
     private val setupDone = AtomicBoolean(false)
 
-    fun connect(systemPrompt: String, voiceName: String = "Aoede") {
+    fun connect(systemPrompt: String, voiceName: String = "Aoede", learningMode: Boolean = false) {
         val uri = URI("$WS_URL?key=$apiKey")
-        flog("CONNECTING key=${apiKey.take(8)}... uri=$uri")
+        flog("CONNECTING key=${apiKey.take(8)}... uri=$uri learningMode=$learningMode")
 
         wsClient = object : WebSocketClient(uri) {
 
             override fun onOpen(handshakedata: ServerHandshake?) {
                 flog("WS OPEN status=${handshakedata?.httpStatus} msg=${handshakedata?.httpStatusMessage}")
-                val msg = GeminiMessage.setup(systemPrompt, voiceName)
+                val msg = GeminiMessage.setup(systemPrompt, voiceName, includeText = learningMode)
                 send(msg)
                 flog("SETUP SEND msgLen=${msg.length}")
 

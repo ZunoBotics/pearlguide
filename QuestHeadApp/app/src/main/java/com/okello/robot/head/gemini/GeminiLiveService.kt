@@ -55,6 +55,8 @@ class GeminiLiveService : Service() {
 
     private var currentPrompt = ""
     private var currentLearningMode = false
+    private var currentPersonaId = ""
+    private var currentLocationId = ""
     private var phoneIp = "192.168.49.1"
 
     private val factBuffer = StringBuilder()
@@ -92,8 +94,10 @@ class GeminiLiveService : Service() {
         Log.i(TAG, "Config updated — reloading Gemini (persona=${config.personaName}, learning=${config.learningMode})")
         currentPrompt = newPrompt
         currentLearningMode = config.learningMode
+        currentPersonaId = config.personaId
+        currentLocationId = config.locationId
         factBuffer.clear()
-        scope.launch { reconnectWithPrompt(newPrompt) }
+        scope.launch { reconnectWithPrompt(newPrompt, config.learningMode) }
     }
 
     private fun handleCommand(command: String) {
@@ -131,15 +135,17 @@ class GeminiLiveService : Service() {
         if (start >= 0 && end > start) {
             val json = raw.substring(start + 12, end)
             factBuffer.clear()
-            scope.launch(Dispatchers.IO) { postFact(json) }
+            scope.launch(Dispatchers.IO) { postFact(json, currentPersonaId, currentLocationId) }
         } else if (raw.length > 2000) {
             factBuffer.clear()
         }
     }
 
-    private fun postFact(json: String) {
+    private fun postFact(json: String, personaId: String, locationId: String) {
         try {
             val j = JSONObject(json)
+            if (personaId.isNotBlank()) j.put("personaId", personaId)
+            if (locationId.isNotBlank()) j.put("locationId", locationId)
             val body = j.toString().toRequestBody("application/json".toMediaType())
             val resp = OkHttpClient().newCall(
                 Request.Builder()
@@ -147,7 +153,7 @@ class GeminiLiveService : Service() {
                     .post(body)
                     .build()
             ).execute()
-            Log.i(TAG, "Fact posted → ${resp.code}: ${j.optString("title")}")
+            Log.i(TAG, "Fact posted → ${resp.code}: ${j.optString("title")} persona=$personaId location=$locationId")
             resp.close()
         } catch (e: Exception) {
             Log.e(TAG, "postFact failed: ${e.message}")
@@ -163,7 +169,7 @@ class GeminiLiveService : Service() {
         scope.launch { testHttpsConnectivity() }
 
         geminiClient = GeminiLiveClient(BuildConfig.GEMINI_API_KEY, filesDir)
-        geminiClient.connect(currentPrompt, "Charon")
+        geminiClient.connect(currentPrompt, "Charon", currentLearningMode)
         audioIn.start()
 
         collectJob = scope.launch { collectEvents() }
@@ -190,21 +196,21 @@ class GeminiLiveService : Service() {
                     statusCallback?.invoke("Error — reconnecting in ${reconnectBackoffMs / 1000}s…")
                     delay(reconnectBackoffMs)
                     reconnectBackoffMs = minOf(reconnectBackoffMs * 2, 30_000L)
-                    reconnectWithPrompt(currentPrompt)
+                    reconnectWithPrompt(currentPrompt, currentLearningMode)
                     return
                 }
             }
         }
     }
 
-    private suspend fun reconnectWithPrompt(prompt: String) {
+    private suspend fun reconnectWithPrompt(prompt: String, learningMode: Boolean = false) {
         collectJob?.cancel()
         audioIn.stop()
         geminiClient.disconnect()
         audioOut.flush()
         delay(500)
         geminiClient = GeminiLiveClient(BuildConfig.GEMINI_API_KEY, filesDir)
-        geminiClient.connect(prompt, "Charon")
+        geminiClient.connect(prompt, "Charon", learningMode)
         audioIn.start()
         collectJob = scope.launch { collectEvents() }
     }
