@@ -14,6 +14,18 @@
         app:implementationMode="compatible"
         android:visibility="visible" />
 
+    <!-- Broker IP settings button (top-left) -->
+    <ImageButton
+        android:id="@+id/brokerSettingsButton"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|start"
+        android:layout_margin="12dp"
+        android:background="#60000000"
+        android:src="@android:drawable/ic_menu_manage"
+        android:contentDescription="Broker IP settings"
+        android:padding="10dp" />
+
     <!-- Stereo depth map (top-right corner, semi-transparent) -->
     <LinearLayout
         android:layout_width="wrap_content"

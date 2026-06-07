@@ -55,6 +55,9 @@ dependencies {
     // Coroutines
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
 
+    // MQTT — subscribe to instructions from OkelloNexus phone app
+    implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
+
     // JSON
     implementation 'org.json:json:20231013'
 
