@@ -28,6 +28,7 @@ fun HomeScreen(
     onNavigateLanguage: () -> Unit,
     onNavigateSettings: () -> Unit,
     onNavigateSafety: () -> Unit,
+    onNavigatePeople: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.connectionState.collectAsState()
@@ -78,6 +79,12 @@ fun HomeScreen(
                     onClick = onNavigateKnowledge,
                     icon = { Icon(Icons.Default.MenuBook, contentDescription = null) },
                     label = { Text("Knowledge") }
+                )
+                NavigationBarItem(
+                    selected = false,
+                    onClick = onNavigatePeople,
+                    icon = { Icon(Icons.Default.People, contentDescription = null) },
+                    label = { Text("People") }
                 )
                 NavigationBarItem(
                     selected = false,

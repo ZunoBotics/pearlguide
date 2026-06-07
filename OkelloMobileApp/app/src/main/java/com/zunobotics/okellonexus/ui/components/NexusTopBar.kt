@@ -14,7 +14,8 @@ fun NexusTopBar(
     showBack: Boolean = false,
     onBack: () -> Unit = {},
     connectionState: RobotConnectionState? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    actions: @Composable (androidx.compose.foundation.layout.RowScope.() -> Unit)? = null
 ) {
     TopAppBar(
         title = { Text(title) },
@@ -27,9 +28,8 @@ fun NexusTopBar(
             }
         },
         actions = {
-            if (connectionState != null) {
-                ConnectionBadge(state = connectionState)
-            }
+            if (connectionState != null) ConnectionBadge(state = connectionState)
+            actions?.invoke(this)
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,

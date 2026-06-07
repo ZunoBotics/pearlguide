@@ -1,6 +1,7 @@
 package com.zunobotics.okellonexus.data.mqtt
 
 import android.util.Log
+import com.zunobotics.okellonexus.data.repository.FaceProfileRepository
 import com.zunobotics.okellonexus.data.repository.KnowledgeRepository
 import com.zunobotics.okellonexus.data.repository.LocationRepository
 import com.zunobotics.okellonexus.data.repository.PersonaRepository
@@ -23,7 +24,8 @@ class ConfigHttpServer @Inject constructor(
     private val personaRepo: PersonaRepository,
     private val locationRepo: LocationRepository,
     private val settingsRepo: SettingsRepository,
-    private val knowledgeRepo: KnowledgeRepository
+    private val knowledgeRepo: KnowledgeRepository,
+    private val faceProfileRepo: FaceProfileRepository
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var serverSocket: ServerSocket? = null
@@ -70,6 +72,7 @@ class ConfigHttpServer @Inject constructor(
         val persona = personaRepo.getActive()
         val location = locationRepo.getActive()
         val settings = settingsRepo.settings.first()
+        val people = faceProfileRepo.profiles.first()
 
         val tags: List<String> = try {
             Json.decodeFromString(persona?.personality ?: "[]")
@@ -88,6 +91,16 @@ class ConfigHttpServer @Inject constructor(
             }
         })
 
+        val peopleArray = JsonArray(people.map { p ->
+            buildJsonObject {
+                put("id", p.id)
+                put("name", p.name)
+                put("roleTag", p.roleTag)
+                put("isVip", p.isCurrentVip)
+                put("notes", p.notes)
+            }
+        })
+
         return buildJsonObject {
             put("personaName", persona?.name ?: "")
             put("role", persona?.role ?: "")
@@ -101,6 +114,7 @@ class ConfigHttpServer @Inject constructor(
             put("locationOpeningHours", location?.openingHours ?: "")
             put("locationSpecialInstructions", location?.specialInstructions ?: "")
             put("facts", factsArray)
+            put("people", peopleArray)
             put("pendingCommand", settings.pendingCommand)
         }.toString()
     }

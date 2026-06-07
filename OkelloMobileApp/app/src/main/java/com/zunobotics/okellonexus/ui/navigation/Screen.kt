@@ -22,4 +22,11 @@ sealed class Screen(val route: String) {
     object Monitor : Screen("monitor")
     object Settings : Screen("settings")
     object Safety : Screen("safety")
+    object People : Screen("people")
+    object AddPerson : Screen("add_person?personId={personId}") {
+        fun route(id: String? = null) = "add_person?personId=${id ?: ""}"
+    }
+    object PersonDetail : Screen("person_detail/{personId}") {
+        fun route(id: String) = "person_detail/$id"
+    }
 }

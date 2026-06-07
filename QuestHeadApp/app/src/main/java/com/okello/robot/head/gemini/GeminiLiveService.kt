@@ -208,6 +208,15 @@ class GeminiLiveService : Service() {
             if (config.locationSpecialInstructions.isNotBlank()) appendLine("Note: ${config.locationSpecialInstructions}")
         }
 
+        if (config.enrolledPeople.isNotEmpty()) {
+            appendLine("\nKNOWN PEOPLE (you may recognise these individuals; greet them by name when confirmed):")
+            config.enrolledPeople.forEach { p ->
+                val vipTag = if (p.isVip) " ★ VIP GUIDE" else ""
+                val notesTag = if (p.notes.isNotBlank()) " — ${p.notes}" else ""
+                appendLine("• ${p.name} [${p.roleTag}$vipTag]$notesTag")
+            }
+        }
+
         if (config.extraInstructions.isNotBlank())
             appendLine("\nADDITIONAL INSTRUCTIONS: ${config.extraInstructions}")
 

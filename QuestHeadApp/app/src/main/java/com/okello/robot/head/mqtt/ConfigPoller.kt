@@ -85,7 +85,8 @@ class ConfigPoller(
                 locationOpeningHours  = j.optString("locationOpeningHours"),
                 locationSpecialInstructions = j.optString("locationSpecialInstructions"),
                 knowledgeFacts        = parseFacts(j.optJSONArray("facts")),
-                pendingCommand        = j.optString("pendingCommand")
+                pendingCommand        = j.optString("pendingCommand"),
+                enrolledPeople        = parsePeople(j.optJSONArray("people"))
             )
             onConfigUpdate(config)
         } catch (e: Exception) {
@@ -110,6 +111,20 @@ class ConfigPoller(
                 title    = f.optString("title"),
                 content  = f.optString("content"),
                 category = f.optString("category")
+            )
+        }
+    }
+
+    private fun parsePeople(arr: JSONArray?): List<EnrolledPerson> {
+        arr ?: return emptyList()
+        return (0 until arr.length()).map { i ->
+            val p = arr.getJSONObject(i)
+            EnrolledPerson(
+                id      = p.optString("id").ifEmpty { UUID.randomUUID().toString() },
+                name    = p.optString("name"),
+                roleTag = p.optString("roleTag", "Guest"),
+                isVip   = p.optBoolean("isVip", false),
+                notes   = p.optString("notes")
             )
         }
     }

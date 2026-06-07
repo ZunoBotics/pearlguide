@@ -13,7 +13,16 @@ data class NexusConfig(
     val locationDescription: String = "",
     val locationOpeningHours: String = "",
     val locationSpecialInstructions: String = "",
-    val pendingCommand: String = ""
+    val pendingCommand: String = "",
+    val enrolledPeople: List<EnrolledPerson> = emptyList()
+)
+
+data class EnrolledPerson(
+    val id: String,
+    val name: String,
+    val roleTag: String,
+    val isVip: Boolean,
+    val notes: String
 )
 
 data class KnowledgeFact(

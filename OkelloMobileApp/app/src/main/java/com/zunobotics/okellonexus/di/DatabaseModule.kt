@@ -23,13 +23,17 @@ object DatabaseModule {
     @Provides @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): RobotDatabase =
         Room.databaseBuilder(ctx, RobotDatabase::class.java, "robot_db")
-            .addMigrations(com.zunobotics.okellonexus.data.db.MIGRATION_1_2)
+            .addMigrations(
+                com.zunobotics.okellonexus.data.db.MIGRATION_1_2,
+                com.zunobotics.okellonexus.data.db.MIGRATION_2_3
+            )
             .build()
 
     @Provides fun providePersonaDao(db: RobotDatabase): PersonaDao = db.personaDao()
     @Provides fun provideLocationDao(db: RobotDatabase): LocationDao = db.locationDao()
     @Provides fun provideKnowledgeDao(db: RobotDatabase): KnowledgeDao = db.knowledgeDao()
     @Provides fun provideCommandDao(db: RobotDatabase): CommandDao = db.commandDao()
+    @Provides fun provideFaceProfileDao(db: RobotDatabase): FaceProfileDao = db.faceProfileDao()
 
     @Provides @Singleton
     fun provideDataStore(@ApplicationContext ctx: Context): DataStore<Preferences> = ctx.dataStore

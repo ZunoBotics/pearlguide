@@ -17,6 +17,9 @@ import com.zunobotics.okellonexus.ui.screens.location.LocationScreen
 import com.zunobotics.okellonexus.ui.screens.monitor.MonitorScreen
 import com.zunobotics.okellonexus.ui.screens.persona.CreatePersonaScreen
 import com.zunobotics.okellonexus.ui.screens.persona.PersonaScreen
+import com.zunobotics.okellonexus.ui.screens.people.AddPersonScreen
+import com.zunobotics.okellonexus.ui.screens.people.PeopleScreen
+import com.zunobotics.okellonexus.ui.screens.people.PersonDetailScreen
 import com.zunobotics.okellonexus.ui.screens.safety.SafetyScreen
 import com.zunobotics.okellonexus.ui.screens.settings.SettingsScreen
 import com.zunobotics.okellonexus.ui.screens.splash.SplashScreen
@@ -44,7 +47,8 @@ fun NexusNavGraph(navController: NavHostController) {
                 onNavigateMonitor = { navController.navigate(Screen.Monitor.route) },
                 onNavigateLanguage = { navController.navigate(Screen.Language.route) },
                 onNavigateSettings = { navController.navigate(Screen.Settings.route) },
-                onNavigateSafety = { navController.navigate(Screen.Safety.route) }
+                onNavigateSafety = { navController.navigate(Screen.Safety.route) },
+                onNavigatePeople = { navController.navigate(Screen.People.route) }
             )
         }
         composable(Screen.Persona.route) {
@@ -110,5 +114,31 @@ fun NexusNavGraph(navController: NavHostController) {
         composable(Screen.Monitor.route) { MonitorScreen(onBack = { navController.popBackStack() }) }
         composable(Screen.Settings.route) { SettingsScreen(onBack = { navController.popBackStack() }) }
         composable(Screen.Safety.route) { SafetyScreen(onBack = { navController.popBackStack() }) }
+        composable(Screen.People.route) {
+            PeopleScreen(
+                onBack = { navController.popBackStack() },
+                onAddPerson = { navController.navigate(Screen.AddPerson.route(null)) },
+                onViewPerson = { id -> navController.navigate(Screen.PersonDetail.route(id)) }
+            )
+        }
+        composable(
+            route = Screen.AddPerson.route,
+            arguments = listOf(navArgument("personId") { type = NavType.StringType; defaultValue = "" })
+        ) { back ->
+            AddPersonScreen(
+                personId = back.arguments?.getString("personId") ?: "",
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(
+            route = Screen.PersonDetail.route,
+            arguments = listOf(navArgument("personId") { type = NavType.StringType })
+        ) { back ->
+            PersonDetailScreen(
+                personId = back.arguments?.getString("personId") ?: "",
+                onBack = { navController.popBackStack() },
+                onEdit = { id -> navController.navigate(Screen.AddPerson.route(id)) }
+            )
+        }
     }
 }
