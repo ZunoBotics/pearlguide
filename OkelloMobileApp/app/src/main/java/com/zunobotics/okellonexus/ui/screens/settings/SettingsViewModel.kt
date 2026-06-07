@@ -14,7 +14,8 @@ data class SettingsUiState(
     val mqttPort: String = "1883",
     val cameraQuality: CameraQuality = CameraQuality.MEDIUM,
     val reconnectIntervalSeconds: Float = 5f,
-    val autoConnect: Boolean = true
+    val autoConnect: Boolean = true,
+    val piIp: String = "10.154.26.49"
 )
 
 enum class CameraQuality(val label: String) {
@@ -49,7 +50,8 @@ class SettingsViewModel @Inject constructor(
                         else -> CameraQuality.MEDIUM
                     },
                     reconnectIntervalSeconds = appSettings.reconnectInterval.toFloat(),
-                    autoConnect = appSettings.autoConnect
+                    autoConnect = appSettings.autoConnect,
+                    piIp = appSettings.piIp
                 )
                 _isLoading.value = false
             }
@@ -76,6 +78,10 @@ class SettingsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(autoConnect = enabled)
     }
 
+    fun updatePiIp(ip: String) {
+        _uiState.value = _uiState.value.copy(piIp = ip)
+    }
+
     fun save() = viewModelScope.launch {
         val s = _uiState.value
         settingsRepo.update {
@@ -84,6 +90,7 @@ class SettingsViewModel @Inject constructor(
             this[AppPrefsKeys.CAMERA_QUALITY] = s.cameraQuality.name.lowercase()
             this[AppPrefsKeys.RECONNECT_INTERVAL] = s.reconnectIntervalSeconds.toInt()
             this[AppPrefsKeys.AUTO_CONNECT] = s.autoConnect
+            this[AppPrefsKeys.PI_IP] = s.piIp.trim()
         }
         _saved.value = true
     }

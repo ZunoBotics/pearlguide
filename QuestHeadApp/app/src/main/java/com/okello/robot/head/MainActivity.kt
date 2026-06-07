@@ -27,8 +27,14 @@ import androidx.core.content.ContextCompat
 import com.okello.robot.head.camera.FrameStreamer
 import com.okello.robot.head.camera.StereoCameraCapture
 import com.okello.robot.head.databinding.ActivityMainBinding
+import com.okello.robot.head.detection.ObstacleDetector
+import com.okello.robot.head.detection.ObstacleResult
 import com.okello.robot.head.gemini.GeminiLiveService
 import com.okello.robot.head.mqtt.ConfigPoller
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 private const val TAG = "MainActivity"
 private const val PREFS_NAME = "nexus"
@@ -48,6 +54,9 @@ class MainActivity : AppCompatActivity() {
     private var stereoCapture: StereoCameraCapture? = null
     private var configPoller: ConfigPoller? = null
     private var frameStreamer: FrameStreamer? = null
+
+    private var obstacleDetector: ObstacleDetector? = null
+    private val detectionScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private var sensorManager: SensorManager? = null
     private var proximitySensor: Sensor? = null
@@ -114,6 +123,8 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         assertScreenOn()
+        BootReceiver.applyScreenSettings(this)
+        BootReceiver.disableProximitySensor(this)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -152,6 +163,8 @@ class MainActivity : AppCompatActivity() {
         stereoCapture = null
         frameStreamer?.stop()
         frameStreamer = null
+        obstacleDetector?.close()
+        obstacleDetector = null
         try { unbindService(serviceConn) } catch (_: Exception) {}
         wakeLock?.release()
         super.onDestroy()
@@ -204,6 +217,7 @@ class MainActivity : AppCompatActivity() {
             onConfigUpdate = { config ->
                 Log.i(TAG, "Config received: persona=${config.personaName} location=${config.locationName}")
                 geminiService?.updateConfig(config)
+                obstacleDetector?.enrollFaces(config.enrolledPeople)
             },
             onStatus = { status ->
                 runOnUiThread { binding.transcriptText.text = status }
@@ -218,13 +232,32 @@ class MainActivity : AppCompatActivity() {
         frameStreamer?.stop()
         frameStreamer = if (phoneIp.isNotEmpty()) FrameStreamer(phoneIp) else null
 
+        if (obstacleDetector == null) {
+            obstacleDetector = ObstacleDetector(applicationContext)
+        }
+
         stereoCapture = StereoCameraCapture(
             context = this,
             lifecycleOwner = this,
             previewView = binding.cameraPreview,
             onFrame = { base64Jpeg ->
                 geminiService?.sendVideoFrame(base64Jpeg)
-                frameStreamer?.sendFrame(base64Jpeg, emptyList())
+                // Run detection async — don't block the camera thread
+                val detector = obstacleDetector
+                val streamer = frameStreamer
+                if (detector != null && streamer != null) {
+                    detectionScope.launch {
+                        val bmp = base64ToBitmap(base64Jpeg)
+                        val detections = if (bmp != null) {
+                            val results = detector.detect(bmp, null)
+                            bmp.recycle()
+                            results.map { toDetectionInfo(it) }
+                        } else emptyList()
+                        streamer.sendFrame(base64Jpeg, detections)
+                    }
+                } else {
+                    frameStreamer?.sendFrame(base64Jpeg, emptyList())
+                }
             },
             onDepth = { result ->
                 runOnUiThread {
@@ -270,4 +303,16 @@ class MainActivity : AppCompatActivity() {
     private fun permissionsGranted() = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
     }
+
+    private fun base64ToBitmap(base64: String): android.graphics.Bitmap? = try {
+        val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    } catch (_: Exception) { null }
+
+    private fun toDetectionInfo(result: ObstacleResult) =
+        com.okello.robot.head.camera.DetectionInfo(
+            type = result.className,
+            direction = result.direction,
+            distanceCm = result.distanceCm
+        )
 }

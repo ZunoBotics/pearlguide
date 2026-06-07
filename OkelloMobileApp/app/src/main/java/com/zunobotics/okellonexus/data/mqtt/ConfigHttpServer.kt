@@ -5,6 +5,7 @@ import com.zunobotics.okellonexus.data.db.entity.KnowledgeEntry
 import com.zunobotics.okellonexus.data.repository.CameraDetection
 import com.zunobotics.okellonexus.data.repository.CameraFrame
 import com.zunobotics.okellonexus.data.repository.CameraStreamRepository
+import com.zunobotics.okellonexus.data.repository.PiRepository
 import com.zunobotics.okellonexus.data.repository.FaceProfileRepository
 import com.zunobotics.okellonexus.data.repository.KnowledgeRepository
 import com.zunobotics.okellonexus.data.repository.LocationRepository
@@ -35,7 +36,8 @@ class ConfigHttpServer @Inject constructor(
     private val knowledgeRepo: KnowledgeRepository,
     private val faceProfileRepo: FaceProfileRepository,
     private val obstacleRepo: ObstacleAlertRepository,
-    private val cameraStreamRepo: CameraStreamRepository
+    private val cameraStreamRepo: CameraStreamRepository,
+    private val piRepo: PiRepository
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var serverSocket: ServerSocket? = null
@@ -205,6 +207,7 @@ class ConfigHttpServer @Inject constructor(
                 put("roleTag", p.roleTag)
                 put("isVip", p.isCurrentVip)
                 put("notes", p.notes)
+                put("photoBase64", p.photoBase64)
             }
         })
 
@@ -226,6 +229,7 @@ class ConfigHttpServer @Inject constructor(
             put("people", peopleArray)
             put("pendingCommand", settings.pendingCommand)
             put("learningMode", settings.learningMode)
+            put("piIp", settings.piIp)
         }.toString()
     }
 }

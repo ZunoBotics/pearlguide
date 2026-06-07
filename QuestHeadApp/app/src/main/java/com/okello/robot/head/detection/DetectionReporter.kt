@@ -28,7 +28,7 @@ private const val MIN_REPORT_INTERVAL_MS = 5_000L
 // See: deferred/obstacle_detection_deferred.md
 class DetectionReporter(
     private val phoneIp: String,
-    private val detector: ObstacleDetector = ObstacleDetector()
+    private val detector: ObstacleDetector
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val http = OkHttpClient.Builder()

@@ -17,7 +17,8 @@ data class NexusConfig(
     val enrolledPeople: List<EnrolledPerson> = emptyList(),
     val learningMode: Boolean = false,
     val personaId: String = "",
-    val locationId: String = ""
+    val locationId: String = "",
+    val piIp: String = ""
 )
 
 data class EnrolledPerson(
@@ -25,7 +26,8 @@ data class EnrolledPerson(
     val name: String,
     val roleTag: String,
     val isVip: Boolean,
-    val notes: String
+    val notes: String,
+    val photoBase64: String = ""
 )
 
 data class KnowledgeFact(

@@ -8,6 +8,7 @@ import com.zunobotics.okellonexus.data.mqtt.IncomingMessage
 import com.zunobotics.okellonexus.data.repository.CameraFrame
 import com.zunobotics.okellonexus.data.repository.CameraStreamRepository
 import com.zunobotics.okellonexus.data.repository.MqttRepository
+import com.zunobotics.okellonexus.data.repository.PiRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -25,13 +26,16 @@ data class MonitorState(
 @HiltViewModel
 class MonitorViewModel @Inject constructor(
     private val mqttRepo: MqttRepository,
-    private val cameraStreamRepo: CameraStreamRepository
+    private val cameraStreamRepo: CameraStreamRepository,
+    private val piRepo: PiRepository
 ) : ViewModel() {
 
     val connectionState: StateFlow<RobotConnectionState> = mqttRepo.connectionState
 
     val cameraFrame: StateFlow<CameraFrame?> = cameraStreamRepo.frame
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val piConnected: StateFlow<Boolean> = piRepo.connected
 
     private val _monitorState = MutableStateFlow(MonitorState())
     val monitorState: StateFlow<MonitorState> = _monitorState.asStateFlow()
@@ -93,4 +97,14 @@ class MonitorViewModel @Inject constructor(
     fun clearEventLog() {
         _eventLog.value = emptyList()
     }
+
+    // ─── Pi movement ─────────────────────────────────────────────────────────
+
+    fun moveForward()  { piRepo.move(0.15f,  0.0f,  0.0f) }
+    fun moveBackward() { piRepo.move(-0.15f, 0.0f,  0.0f) }
+    fun strafeLeft()   { piRepo.move(0.0f,   0.15f, 0.0f) }
+    fun strafeRight()  { piRepo.move(0.0f,  -0.15f, 0.0f) }
+    fun turnLeft()     { piRepo.move(0.0f,   0.0f,  30.0f) }
+    fun turnRight()    { piRepo.move(0.0f,   0.0f, -30.0f) }
+    fun stopMovement() { piRepo.stop() }
 }

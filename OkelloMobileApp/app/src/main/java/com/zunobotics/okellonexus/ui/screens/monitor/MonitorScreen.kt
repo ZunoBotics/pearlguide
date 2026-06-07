@@ -4,9 +4,11 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -16,10 +18,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.zunobotics.okellonexus.data.model.RobotConnectionState
 import com.zunobotics.okellonexus.data.repository.CameraFrame
@@ -39,6 +43,7 @@ fun MonitorScreen(
     val monitorState by viewModel.monitorState.collectAsState()
     val eventLog by viewModel.eventLog.collectAsState()
     val cameraFrame by viewModel.cameraFrame.collectAsState()
+    val piConnected by viewModel.piConnected.collectAsState()
 
     Scaffold(
         topBar = {
@@ -100,6 +105,45 @@ fun MonitorScreen(
                 Text("Camera Feed", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
                 Spacer(Modifier.height(8.dp))
                 CameraFeedPanel(frame = cameraFrame)
+            }
+
+            // Drive controls
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Drive Controls", style = MaterialTheme.typography.titleMedium, color = TextPrimary, modifier = Modifier.weight(1f))
+                    Surface(
+                        color = if (piConnected) SuccessTeal.copy(alpha = 0.15f) else ErrorRed.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Box(Modifier.size(7.dp).background(if (piConnected) SuccessTeal else ErrorRed, CircleShape))
+                            Text(
+                                if (piConnected) "Pi Connected" else "Pi Offline",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (piConnected) SuccessTeal else ErrorRed
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                RobotDpad(
+                    enabled = piConnected,
+                    onForward = viewModel::moveForward,
+                    onBackward = viewModel::moveBackward,
+                    onLeft = viewModel::strafeLeft,
+                    onRight = viewModel::strafeRight,
+                    onTurnLeft = viewModel::turnLeft,
+                    onTurnRight = viewModel::turnRight,
+                    onStop = viewModel::stopMovement
+                )
             }
 
             // Status Panel
@@ -306,6 +350,100 @@ private fun StatusRow(label: String, value: String) {
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
         Text(value, style = MaterialTheme.typography.bodyMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun RobotDpad(
+    enabled: Boolean,
+    onForward: () -> Unit,
+    onBackward: () -> Unit,
+    onLeft: () -> Unit,
+    onRight: () -> Unit,
+    onTurnLeft: () -> Unit,
+    onTurnRight: () -> Unit,
+    onStop: () -> Unit
+) {
+    val btnColor = if (enabled) ElectricBlue else TextSecondary.copy(alpha = 0.3f)
+
+    @Composable
+    fun DriveButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onPress: () -> Unit) {
+        Surface(
+            color = btnColor.copy(alpha = 0.15f),
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier
+                .size(60.dp)
+                .pointerInput(enabled) {
+                    detectTapGestures(
+                        onPress = {
+                            if (enabled) {
+                                onPress()
+                                tryAwaitRelease()
+                                onStop()
+                            }
+                        }
+                    )
+                }
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Icon(icon, contentDescription = label, tint = btnColor, modifier = Modifier.size(24.dp))
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+        shape = RoundedCornerShape(14.dp),
+        elevation = CardDefaults.cardElevation(1.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Turn row
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                DriveButton(Icons.Default.RotateLeft, "Turn Left", onTurnLeft)
+                Spacer(Modifier.width(52.dp))
+                DriveButton(Icons.Default.RotateRight, "Turn Right", onTurnRight)
+            }
+            // Forward
+            Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+                DriveButton(Icons.Default.ArrowUpward, "Forward", onForward)
+            }
+            // Left / Stop / Right
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                DriveButton(Icons.Default.ArrowBack, "Left", onLeft)
+                Surface(
+                    color = ErrorRed.copy(alpha = if (enabled) 0.15f else 0.06f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .size(60.dp)
+                        .pointerInput(enabled) {
+                            detectTapGestures(onTap = { if (enabled) onStop() })
+                        }
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Text("STOP", fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                            color = if (enabled) ErrorRed else ErrorRed.copy(alpha = 0.3f))
+                    }
+                }
+                DriveButton(Icons.Default.ArrowForward, "Right", onRight)
+            }
+            // Backward
+            Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+                DriveButton(Icons.Default.ArrowDownward, "Backward", onBackward)
+            }
+            if (!enabled) {
+                Text(
+                    "Pi not connected — connect at ${10}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
     }
 }
 

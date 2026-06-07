@@ -23,6 +23,7 @@ object AppPrefsKeys {
     val CODE_SWITCHING = booleanPreferencesKey("code_switching")
     val PENDING_COMMAND = stringPreferencesKey("pending_command")
     val LEARNING_MODE = booleanPreferencesKey("learning_mode")
+    val PI_IP = stringPreferencesKey("pi_ip")
 }
 
 data class AppSettings(
@@ -38,7 +39,8 @@ data class AppSettings(
     val selectedLanguages: String = "en",
     val codeSwitching: Boolean = false,
     val pendingCommand: String = "",
-    val learningMode: Boolean = false
+    val learningMode: Boolean = false,
+    val piIp: String = "10.154.26.49"
 )
 
 @Singleton
@@ -61,7 +63,8 @@ class SettingsRepository @Inject constructor(
                 selectedLanguages = prefs[AppPrefsKeys.SELECTED_LANGUAGES] ?: "en",
                 codeSwitching = prefs[AppPrefsKeys.CODE_SWITCHING] ?: false,
                 pendingCommand = prefs[AppPrefsKeys.PENDING_COMMAND] ?: "",
-                learningMode = prefs[AppPrefsKeys.LEARNING_MODE] ?: false
+                learningMode = prefs[AppPrefsKeys.LEARNING_MODE] ?: false,
+                piIp = prefs[AppPrefsKeys.PI_IP] ?: "10.154.26.49"
             )
         }
 
@@ -89,5 +92,9 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setLearningMode(enabled: Boolean) {
         dataStore.edit { it[AppPrefsKeys.LEARNING_MODE] = enabled }
+    }
+
+    suspend fun setPiIp(ip: String) {
+        dataStore.edit { it[AppPrefsKeys.PI_IP] = ip.trim() }
     }
 }

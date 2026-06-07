@@ -102,6 +102,17 @@ fun SettingsScreen(
                             )
                         }
 
+                        OutlinedTextField(
+                            value = uiState.piIp,
+                            onValueChange = { viewModel.updatePiIp(it) },
+                            label = { Text("Pi (OkelloServer) IP") },
+                            placeholder = { Text("10.154.26.49") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                            leadingIcon = { Icon(Icons.Default.Memory, contentDescription = null, tint = TextSecondary) }
+                        )
+
                         // Auto Connect Toggle
                         Row(
                             modifier = Modifier.fillMaxWidth(),

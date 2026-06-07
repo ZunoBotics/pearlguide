@@ -12,6 +12,7 @@ import com.okello.robot.head.BuildConfig
 import com.okello.robot.head.audio.AudioInputManager
 import com.okello.robot.head.audio.AudioOutputManager
 import com.okello.robot.head.mqtt.NexusConfig
+import com.okello.robot.head.pi.PiMover
 import kotlinx.coroutines.*
 import java.util.concurrent.atomic.AtomicBoolean
 import okhttp3.MediaType.Companion.toMediaType
@@ -35,6 +36,21 @@ STRICT RULES — never break these:
 3. Keep responses short — 2-4 sentences. You are speaking out loud to people in real life.
 4. If asked about something physical, stay in character e.g. "Ha, my robot arms are still being calibrated!"
 5. You have two cameras in your eyes streaming a stereo image. Use them to see and interact with people.
+
+MOVEMENT — you can physically move using these silent tokens (never speak them aloud, output them as plain text on any line):
+- [[MOVE:forward]]   — move forward continuously
+- [[MOVE:backward]]  — move backward continuously
+- [[MOVE:left]]      — strafe left
+- [[MOVE:right]]     — strafe right
+- [[MOVE:turn_left]] — spin left
+- [[MOVE:turn_right]]— spin right
+- [[STOP]]           — stop all movement immediately
+
+Rules for movement:
+- When someone says "come here", "follow me", "move forward", "go forward", etc. → output [[MOVE:forward]] then speak naturally.
+- When told to stop, halt, or freeze → output [[STOP]] then acknowledge.
+- For continuous commands like "follow me" or "keep going", output the token once — the system will loop it until [[STOP]].
+- NEVER mention the tokens in speech. Just output them silently alongside your words.
 """
 
 class GeminiLiveService : Service() {
@@ -62,6 +78,8 @@ class GeminiLiveService : Service() {
     private var phoneIp = "192.168.49.1"
 
     private val factBuffer = StringBuilder()
+    private val moveBuffer = StringBuilder()
+    private val piMover = PiMover()
     @Volatile private var lastCameraFrame: String? = null
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
@@ -80,6 +98,7 @@ class GeminiLiveService : Service() {
         audioIn.stop()
         audioOut.stop()
         geminiClient.disconnect()
+        piMover.close()
         scope.cancel()
         super.onDestroy()
     }
@@ -90,6 +109,7 @@ class GeminiLiveService : Service() {
         if (config.pendingCommand.isNotEmpty()) handleCommand(config.pendingCommand)
 
         phoneIp = getSharedPreferences("nexus", MODE_PRIVATE).getString("broker_ip", "192.168.49.1") ?: "192.168.49.1"
+        if (config.piIp.isNotBlank()) piMover.piIp = config.piIp
 
         val newPrompt = buildSystemPrompt(config)
         val modeChanged = config.learningMode != currentLearningMode
@@ -131,6 +151,24 @@ class GeminiLiveService : Service() {
     fun sendVideoFrame(base64Jpeg: String) {
         lastCameraFrame = base64Jpeg
         geminiClient.sendVideo(base64Jpeg)
+    }
+
+    private fun checkForMoveCommand(text: String) {
+        moveBuffer.append(text)
+        val raw = moveBuffer.toString()
+        // Match [[MOVE:command]] or [[STOP]]
+        val moveRegex = Regex("\\[\\[MOVE:([a-z_]+)\\]\\]")
+        val stopRegex = Regex("\\[\\[STOP\\]\\]")
+        var consumed = false
+        moveRegex.find(raw)?.let { m ->
+            piMover.execute(m.groupValues[1])
+            consumed = true
+        }
+        if (stopRegex.containsMatchIn(raw)) {
+            piMover.stopAll()
+            consumed = true
+        }
+        if (consumed || raw.length > 500) moveBuffer.clear()
     }
 
     private fun checkForSaveFact(text: String) {
@@ -194,10 +232,11 @@ class GeminiLiveService : Service() {
                 is GeminiEvent.TextChunk   -> {
                     Log.d(TAG, "Gemini text: ${event.text.take(80)}")
                     statusCallback?.invoke(event.text)
+                    checkForMoveCommand(event.text)
                     if (currentLearningMode) checkForSaveFact(event.text)
                 }
                 is GeminiEvent.TurnComplete -> statusCallback?.invoke("Listening…")
-                is GeminiEvent.Interrupted  -> audioOut.flush()
+                is GeminiEvent.Interrupted  -> { audioOut.flush(); moveBuffer.clear() }
                 is GeminiEvent.Error -> {
                     Log.e(TAG, "Gemini error: ${event.message}")
                     statusCallback?.invoke("Error — reconnecting in ${reconnectBackoffMs / 1000}s…")

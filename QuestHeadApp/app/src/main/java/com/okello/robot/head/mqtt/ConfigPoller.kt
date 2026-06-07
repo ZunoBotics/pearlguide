@@ -89,7 +89,8 @@ class ConfigPoller(
                 enrolledPeople        = parsePeople(j.optJSONArray("people")),
                 learningMode          = j.optBoolean("learningMode", false),
                 personaId             = j.optString("personaId"),
-                locationId            = j.optString("locationId")
+                locationId            = j.optString("locationId"),
+                piIp                  = j.optString("piIp")
             )
             onConfigUpdate(config)
         } catch (e: Exception) {
@@ -123,11 +124,12 @@ class ConfigPoller(
         return (0 until arr.length()).map { i ->
             val p = arr.getJSONObject(i)
             EnrolledPerson(
-                id      = p.optString("id").ifEmpty { UUID.randomUUID().toString() },
-                name    = p.optString("name"),
-                roleTag = p.optString("roleTag", "Guest"),
-                isVip   = p.optBoolean("isVip", false),
-                notes   = p.optString("notes")
+                id          = p.optString("id").ifEmpty { UUID.randomUUID().toString() },
+                name        = p.optString("name"),
+                roleTag     = p.optString("roleTag", "Guest"),
+                isVip       = p.optBoolean("isVip", false),
+                notes       = p.optString("notes"),
+                photoBase64 = p.optString("photoBase64")
             )
         }
     }
