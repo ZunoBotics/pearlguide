@@ -19,9 +19,9 @@ object AppPrefsKeys {
     val THEME = stringPreferencesKey("theme")
     val ACTIVE_PERSONA_ID = stringPreferencesKey("active_persona_id")
     val ACTIVE_LOCATION_ID = stringPreferencesKey("active_location_id")
-    // Languages — comma-separated list of ISO codes e.g. "en,sw,lg,fr"
     val SELECTED_LANGUAGES = stringPreferencesKey("selected_languages")
     val CODE_SWITCHING = booleanPreferencesKey("code_switching")
+    val PENDING_COMMAND = stringPreferencesKey("pending_command")
 }
 
 data class AppSettings(
@@ -35,7 +35,8 @@ data class AppSettings(
     val activePersonaId: String = "",
     val activeLocationId: String = "",
     val selectedLanguages: String = "en",
-    val codeSwitching: Boolean = false
+    val codeSwitching: Boolean = false,
+    val pendingCommand: String = ""
 )
 
 @Singleton
@@ -56,7 +57,8 @@ class SettingsRepository @Inject constructor(
                 activePersonaId = prefs[AppPrefsKeys.ACTIVE_PERSONA_ID] ?: "",
                 activeLocationId = prefs[AppPrefsKeys.ACTIVE_LOCATION_ID] ?: "",
                 selectedLanguages = prefs[AppPrefsKeys.SELECTED_LANGUAGES] ?: "en",
-                codeSwitching = prefs[AppPrefsKeys.CODE_SWITCHING] ?: false
+                codeSwitching = prefs[AppPrefsKeys.CODE_SWITCHING] ?: false,
+                pendingCommand = prefs[AppPrefsKeys.PENDING_COMMAND] ?: ""
             )
         }
 
@@ -76,5 +78,9 @@ class SettingsRepository @Inject constructor(
             it[AppPrefsKeys.SELECTED_LANGUAGES] = codes.joinToString(",")
             it[AppPrefsKeys.CODE_SWITCHING] = codeSwitching
         }
+    }
+
+    suspend fun setCommand(command: String) {
+        dataStore.edit { it[AppPrefsKeys.PENDING_COMMAND] = command }
     }
 }

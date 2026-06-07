@@ -21,4 +21,5 @@ sealed class Screen(val route: String) {
     object Command : Screen("command")
     object Monitor : Screen("monitor")
     object Settings : Screen("settings")
+    object Safety : Screen("safety")
 }

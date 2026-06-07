@@ -12,7 +12,8 @@ data class NexusConfig(
     val locationName: String = "",
     val locationDescription: String = "",
     val locationOpeningHours: String = "",
-    val locationSpecialInstructions: String = ""
+    val locationSpecialInstructions: String = "",
+    val pendingCommand: String = ""
 )
 
 data class KnowledgeFact(

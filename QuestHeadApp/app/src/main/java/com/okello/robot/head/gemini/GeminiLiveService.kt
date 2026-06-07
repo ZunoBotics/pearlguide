@@ -75,13 +75,39 @@ class GeminiLiveService : Service() {
 
     // ─── Public API for MainActivity ──────────────────────────────────────────
 
-    /** Called by NexusCommandClient when the phone app sends a config update. */
     fun updateConfig(config: NexusConfig) {
+        if (config.pendingCommand.isNotEmpty()) handleCommand(config.pendingCommand)
+
         val newPrompt = buildSystemPrompt(config)
         if (newPrompt == currentPrompt) return
         Log.i(TAG, "Config updated — reloading Gemini (persona=${config.personaName})")
         currentPrompt = newPrompt
         scope.launch { reconnectWithPrompt(newPrompt) }
+    }
+
+    private fun handleCommand(command: String) {
+        Log.i(TAG, "Command received: $command")
+        when (command) {
+            "emergency_stop" -> {
+                statusCallback?.invoke("⚠ EMERGENCY STOP")
+                audioIn.stop()
+                geminiClient.sendText(
+                    "SYSTEM INTERRUPT: Stop speaking immediately. Announce in a serious tone: " +
+                    "\"Emergency stop activated. Please stand by.\""
+                )
+            }
+            "call_human" -> {
+                geminiClient.sendText(
+                    "SYSTEM: Announce loudly right now, in whichever language seems most appropriate: " +
+                    "\"Excuse me, could a staff member please come to assist here? Thank you!\""
+                )
+            }
+            "resume" -> {
+                audioIn.start()
+                statusCallback?.invoke("Listening…")
+                Log.i(TAG, "Robot resumed after emergency stop")
+            }
+        }
     }
 
     fun sendVideoFrame(base64Jpeg: String) = geminiClient.sendVideo(base64Jpeg)

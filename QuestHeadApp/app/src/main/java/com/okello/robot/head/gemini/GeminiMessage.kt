@@ -43,6 +43,17 @@ object GeminiMessage {
                     .put("data", base64Jpeg)
                     .put("mimeType", "image/jpeg"))
         ).toString()
+
+    fun clientText(text: String): String =
+        JSONObject().put(
+            "clientContent", JSONObject()
+                .put("turns", JSONArray().put(
+                    JSONObject()
+                        .put("role", "user")
+                        .put("parts", JSONArray().put(
+                            JSONObject().put("text", text)))))
+                .put("turnComplete", true)
+        ).toString()
 }
 
 // ─── Inbound — parsed events from Gemini Live ────────────────────────────────

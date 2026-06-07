@@ -110,6 +110,11 @@ class GeminiLiveClient(
         wsClient?.send(GeminiMessage.videoFrame(base64Jpeg))
     }
 
+    fun sendText(text: String) {
+        if (!setupDone.get()) return
+        wsClient?.send(GeminiMessage.clientText(text))
+    }
+
     fun disconnect() {
         setupDone.set(false)
         try { wsClient?.close() } catch (_: Exception) {}

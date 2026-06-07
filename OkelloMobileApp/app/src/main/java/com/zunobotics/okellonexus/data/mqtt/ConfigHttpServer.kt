@@ -101,6 +101,7 @@ class ConfigHttpServer @Inject constructor(
             put("locationOpeningHours", location?.openingHours ?: "")
             put("locationSpecialInstructions", location?.specialInstructions ?: "")
             put("facts", factsArray)
+            put("pendingCommand", settings.pendingCommand)
         }.toString()
     }
 }

@@ -84,7 +84,8 @@ class ConfigPoller(
                 locationDescription   = j.optString("locationDescription"),
                 locationOpeningHours  = j.optString("locationOpeningHours"),
                 locationSpecialInstructions = j.optString("locationSpecialInstructions"),
-                knowledgeFacts        = parseFacts(j.optJSONArray("facts"))
+                knowledgeFacts        = parseFacts(j.optJSONArray("facts")),
+                pendingCommand        = j.optString("pendingCommand")
             )
             onConfigUpdate(config)
         } catch (e: Exception) {

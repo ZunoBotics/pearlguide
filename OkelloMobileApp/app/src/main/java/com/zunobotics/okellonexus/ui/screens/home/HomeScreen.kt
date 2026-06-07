@@ -27,6 +27,7 @@ fun HomeScreen(
     onNavigateMonitor: () -> Unit,
     onNavigateLanguage: () -> Unit,
     onNavigateSettings: () -> Unit,
+    onNavigateSafety: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.connectionState.collectAsState()
@@ -41,7 +42,10 @@ fun HomeScreen(
             TopAppBar(
                 title = { Text("Nexus", style = MaterialTheme.typography.titleLarge) },
                 actions = {
-                    ConnectionBadge(state = state, modifier = Modifier.padding(end = 16.dp))
+                    ConnectionBadge(state = state, modifier = Modifier.padding(end = 8.dp))
+                    IconButton(onClick = onNavigateSafety) {
+                        Icon(Icons.Default.Shield, contentDescription = "Safety", tint = ErrorRed)
+                    }
                     IconButton(onClick = onNavigateSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
@@ -174,13 +178,13 @@ fun HomeScreen(
                         Text("Send Command")
                     }
                     Button(
-                        onClick = { viewModel.sendEmergencyStop() },
+                        onClick = onNavigateSafety,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
                     ) {
-                        Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("E-Stop")
+                        Text("Safety")
                     }
                 }
             }
