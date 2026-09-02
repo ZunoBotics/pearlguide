@@ -36,6 +36,8 @@ class MonitorViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val piConnected: StateFlow<Boolean> = piRepo.connected
+    val agentRunning: StateFlow<Boolean> = piRepo.agentRunning
+    val temperature: StateFlow<com.zunobotics.okellonexus.data.repository.PiRepository.TemperatureReading?> = piRepo.temperature
 
     private val _monitorState = MutableStateFlow(MonitorState())
     val monitorState: StateFlow<MonitorState> = _monitorState.asStateFlow()
@@ -99,6 +101,10 @@ class MonitorViewModel @Inject constructor(
     }
 
     // ─── Pi movement ─────────────────────────────────────────────────────────
+
+    fun toggleAgent() {
+        if (piRepo.agentRunning.value) piRepo.stopAgent() else piRepo.startAgent()
+    }
 
     fun moveForward()  { piRepo.move(0.15f,  0.0f,  0.0f) }
     fun moveBackward() { piRepo.move(-0.15f, 0.0f,  0.0f) }

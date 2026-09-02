@@ -47,9 +47,9 @@ fun AddPersonScreen(
                 val inputStream = context.contentResolver.openInputStream(it)
                 val bytes = inputStream?.readBytes() ?: return@runCatching
                 inputStream.close()
-                // Decode and re-encode as scaled-down thumbnail (~150x150)
+                // Decode and re-encode as scaled-down thumbnail (~400x400 — enough for face detection)
                 val original = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                val scale = 150f / maxOf(original.width, original.height)
+                val scale = 400f / maxOf(original.width, original.height)
                 val scaled = android.graphics.Bitmap.createScaledBitmap(
                     original,
                     (original.width * scale).toInt(),

@@ -1,0 +1,58 @@
+{
+  "1": {
+    "model": "SCS125",
+    "deg_range": 220,
+    "raw_min_step": 147,
+    "raw_max_step": 993,
+    "min_step": 167,
+    "min_deg": 35.9,
+    "max_step": 973,
+    "max_deg": 209.2,
+    "centre_step": 570,
+    "centre_deg": 122.6,
+    "safety_margin": 20,
+    "calibrated": "2026-07-18"
+  },
+  "2": {
+    "model": "SCS125",
+    "deg_range": 220,
+    "raw_min_step": 29,
+    "raw_max_step": 995,
+    "min_step": 49,
+    "min_deg": 10.5,
+    "max_step": 975,
+    "max_deg": 209.7,
+    "centre_step": 512,
+    "centre_deg": 110.1,
+    "safety_margin": 20,
+    "calibrated": "2026-07-18"
+  },
+  "3": {
+    "model": "SCS0009",
+    "deg_range": 300,
+    "raw_min_step": 303,
+    "raw_max_step": 462,
+    "min_step": 323,
+    "min_deg": 94.7,
+    "max_step": 442,
+    "max_deg": 129.6,
+    "centre_step": 382,
+    "centre_deg": 112.0,
+    "safety_margin": 20,
+    "calibrated": "2026-07-18"
+  },
+  "4": {
+    "model": "SCS0009",
+    "deg_range": 300,
+    "raw_min_step": 218,
+    "raw_max_step": 486,
+    "min_step": 238,
+    "min_deg": 69.8,
+    "max_step": 466,
+    "max_deg": 136.7,
+    "centre_step": 352,
+    "centre_deg": 103.2,
+    "safety_margin": 20,
+    "calibrated": "2026-07-18"
+  }
+}

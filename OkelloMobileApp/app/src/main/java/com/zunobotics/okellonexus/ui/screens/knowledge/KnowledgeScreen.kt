@@ -2,6 +2,8 @@ package com.zunobotics.okellonexus.ui.screens.knowledge
 
 import android.graphics.BitmapFactory
 import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.zunobotics.okellonexus.data.db.entity.KnowledgeEntry
@@ -23,6 +26,7 @@ import com.zunobotics.okellonexus.ui.components.ConfirmDialog
 import com.zunobotics.okellonexus.ui.components.EmptyState
 import com.zunobotics.okellonexus.ui.components.NexusTopBar
 import com.zunobotics.okellonexus.ui.theme.*
+import kotlinx.coroutines.launch
 
 @Composable
 fun KnowledgeScreen(
@@ -35,7 +39,29 @@ fun KnowledgeScreen(
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val personas by viewModel.personas.collectAsState()
     val selectedPersonaId by viewModel.selectedPersonaId.collectAsState()
+    val lastImportCount by viewModel.lastImportCount.collectAsState()
     var deleteTarget by remember { mutableStateOf<KnowledgeEntry?>(null) }
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+
+    val csvLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val lines = context.contentResolver.openInputStream(uri)
+                ?.bufferedReader()?.readLines() ?: emptyList()
+            viewModel.importFromCsv(lines)
+        }
+    }
+
+    LaunchedEffect(lastImportCount) {
+        val count = lastImportCount ?: return@LaunchedEffect
+        coroutineScope.launch {
+            snackbarHostState.showSnackbar("Imported $count ${if (count == 1) "fact" else "facts"}")
+        }
+        viewModel.clearImportCount()
+    }
 
     deleteTarget?.let { target ->
         ConfirmDialog(
@@ -47,7 +73,25 @@ fun KnowledgeScreen(
     }
 
     Scaffold(
-        topBar = { NexusTopBar(title = "Knowledge Base", showBack = true, onBack = onBack) },
+        topBar = {
+            NexusTopBar(
+                title = "Knowledge Base",
+                showBack = true,
+                onBack = onBack,
+                actions = {
+                    IconButton(onClick = {
+                        csvLauncher.launch(arrayOf("text/csv", "text/plain", "*/*"))
+                    }) {
+                        Icon(
+                            Icons.Default.FileUpload,
+                            contentDescription = "Import CSV",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { onAddFact(selectedPersonaId ?: "") },

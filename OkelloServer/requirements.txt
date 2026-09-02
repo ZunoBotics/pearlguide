@@ -1,1 +1,4 @@
 feetech-servo-sdk
+google-genai
+pyaudio
+numpy

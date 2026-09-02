@@ -1,118 +1,148 @@
 package com.okello.robot.head.detection
 
+import android.content.res.AssetManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.Log
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.face.Face
-import com.google.mlkit.vision.face.FaceDetection
-import com.google.mlkit.vision.face.FaceDetectorOptions
+import com.okello.robot.head.BuildConfig
 import com.okello.robot.head.mqtt.EnrolledPerson
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
-import kotlin.math.sqrt
+import com.kbyai.facesdk.FaceBox
+import com.kbyai.facesdk.FaceDetectionParam
+import com.kbyai.facesdk.FaceSDK
 
 private const val TAG = "FaceRecognizer"
-private const val FACE_CROP_SIZE = 96
-private const val MATCH_THRESHOLD = 0.70   // cosine similarity threshold
 
-data class FaceMatch(val name: String, val roleTag: String, val isVip: Boolean, val similarity: Float)
+data class FaceMatch(
+    val name: String,
+    val roleTag: String,
+    val isVip: Boolean,
+    val similarity: Float,
+    val isLive: Boolean = true,
+    val cx: Float = 0.5f,   // normalized face center x [0,1]
+    val cy: Float = 0.5f,   // normalized face center y [0,1]
+    val w: Float  = 0.25f,  // normalized face width
+    val h: Float  = 0.35f   // normalized face height
+)
 
-class FaceRecognizer {
+class FaceRecognizer(assets: AssetManager) {
 
-    private val detector = FaceDetection.getClient(
-        FaceDetectorOptions.Builder()
-            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
-            .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
-            .setMinFaceSize(0.10f)
-            .build()
-    )
+    var matchThreshold: Float = 0.65f
 
-    // Each entry: (person, histogram feature vector of their reference photo)
-    private val enrolled = mutableListOf<Pair<EnrolledPerson, FloatArray>>()
+    private var sdkReady = false
 
-    fun enroll(people: List<EnrolledPerson>) {
-        enrolled.clear()
-        for (p in people) {
-            if (p.photoBase64.isBlank()) continue
-            val bmp = decodeBase64Bitmap(p.photoBase64) ?: continue
-            val feat = extractFeatures(bmp)
-            bmp.recycle()
-            enrolled.add(p to feat)
+    init {
+        var ret = FaceSDK.setActivation(BuildConfig.KBY_LICENCE_KEY)
+        if (ret == FaceSDK.SDK_SUCCESS) {
+            ret = FaceSDK.init(assets)
+            sdkReady = ret == FaceSDK.SDK_SUCCESS
+            Log.i(TAG, if (sdkReady) "kby-ai SDK ready" else "SDK init failed: $ret")
+        } else {
+            Log.e(TAG, "kby-ai activation failed: $ret")
         }
-        Log.i(TAG, "Enrolled ${enrolled.size} faces")
     }
 
-    suspend fun detect(frameBitmap: Bitmap): List<FaceMatch> {
-        val faces = detectFaces(frameBitmap)
+    // Enrolled: (person, face template ByteArray)
+    private val enrolled = mutableListOf<Pair<EnrolledPerson, ByteArray>>()
+
+    fun enroll(people: List<EnrolledPerson>) {
+        if (!sdkReady) { Log.w(TAG, "enroll() skipped — SDK not ready"); return }
+        Log.i(TAG, "Enrolling ${people.size} people…")
+        enrolled.clear()
+        val param = FaceDetectionParam().apply { check_liveness = false }
+        for (p in people) {
+            if (p.photoBase64.isBlank()) { Log.w(TAG, "No photo for ${p.name}, skipping"); continue }
+            val bmp = decodeBase64Bitmap(p.photoBase64)
+            if (bmp == null) { Log.w(TAG, "Bad base64 for ${p.name}"); continue }
+            val enrollBmp = if (maxOf(bmp.width, bmp.height) < 300) {
+                val s = 300f / maxOf(bmp.width, bmp.height)
+                Bitmap.createScaledBitmap(bmp, (bmp.width * s).toInt(), (bmp.height * s).toInt(), true)
+                    .also { bmp.recycle() }
+            } else bmp
+            Log.d(TAG, "Detecting face in photo for ${p.name} (${enrollBmp.width}x${enrollBmp.height})")
+            val faces = FaceSDK.faceDetection(enrollBmp, param)
+            if (faces.isNullOrEmpty()) {
+                Log.w(TAG, "No face found in photo for ${p.name}")
+                enrollBmp.recycle(); continue
+            }
+            val template = FaceSDK.templateExtraction(enrollBmp, faces[0])
+            enrollBmp.recycle()
+            enrolled.add(p to template)
+            Log.i(TAG, "Enrolled: ${p.name} (${p.roleTag})")
+        }
+        Log.i(TAG, "Total enrolled: ${enrolled.size}")
+    }
+
+    /**
+     * Preferred entry point for live camera frames. Converts NV21 bytes directly using
+     * FaceSDK.yuv2Bitmap() (as per kby-ai docs) to avoid JPEG compression artefacts.
+     * mode = 7 → portrait/landscape orientation used by Quest world-facing cameras.
+     */
+    fun detectFromNv21(nv21: ByteArray, width: Int, height: Int, rotationMode: Int = 7): List<FaceMatch> {
+        if (!sdkReady) return emptyList()
+        return try {
+            val bmp = FaceSDK.yuv2Bitmap(nv21, width, height, rotationMode)
+            if (bmp == null) { Log.w(TAG, "yuv2Bitmap returned null (mode=$rotationMode ${width}x${height})"); return emptyList() }
+            Log.d(TAG, "yuv2Bitmap OK: ${bmp.width}x${bmp.height}")
+            val result = detect(bmp)
+            bmp.recycle()
+            result
+        } catch (t: Throwable) {
+            Log.e(TAG, "detectFromNv21 native error: ${t.message}")
+            emptyList()
+        }
+    }
+
+    /** Fallback: run detection on an already-decoded Bitmap. */
+    fun detect(frameBitmap: Bitmap): List<FaceMatch> {
+        if (!sdkReady) return emptyList()
+
+        val param = FaceDetectionParam().apply {
+            check_liveness = false
+        }
+        val faces = try {
+            FaceSDK.faceDetection(frameBitmap, param) ?: return emptyList()
+        } catch (t: Throwable) {
+            Log.e(TAG, "faceDetection native error: ${t.message}")
+            return emptyList()
+        }
         if (faces.isEmpty()) return emptyList()
 
+        val bw = frameBitmap.width.toFloat()
+        val bh = frameBitmap.height.toFloat()
+
         val matches = mutableListOf<FaceMatch>()
-
         for (face in faces) {
-            val box = face.boundingBox
-            val x = box.left.coerceAtLeast(0)
-            val y = box.top.coerceAtLeast(0)
-            val w = box.width().coerceAtMost(frameBitmap.width - x)
-            val h = box.height().coerceAtMost(frameBitmap.height - y)
-            if (w <= 0 || h <= 0) continue
+            // Normalize bounding box to [0,1]
+            val cx = ((face.x1 + face.x2) / 2f) / bw
+            val cy = ((face.y1 + face.y2) / 2f) / bh
+            val fw = (face.x2 - face.x1).toFloat() / bw
+            val fh = (face.y2 - face.y1).toFloat() / bh
 
-            val crop = Bitmap.createBitmap(frameBitmap, x, y, w, h)
-            val feat = extractFeatures(crop)
-            crop.recycle()
-
-            if (enrolled.isEmpty()) {
-                matches.add(FaceMatch("Unknown", "Guest", false, 0f))
+            val template = try {
+                FaceSDK.templateExtraction(frameBitmap, face)
+            } catch (t: Throwable) {
+                Log.e(TAG, "templateExtraction native error: ${t.message}")
                 continue
             }
-            val best = enrolled.maxByOrNull { (_, ref) -> cosineSim(feat, ref) }!!
-            val sim = cosineSim(feat, best.first.let { enrolled.first { it.first == best.first }.second })
-            val person = best.first
-            if (sim >= MATCH_THRESHOLD) {
-                matches.add(FaceMatch(person.name, person.roleTag, person.isVip, sim))
-                Log.d(TAG, "Face match: ${person.name} (sim=%.2f)".format(sim))
+
+            if (enrolled.isEmpty()) {
+                matches.add(FaceMatch("Unknown", "Guest", false, 0f, true, cx, cy, fw, fh))
+                continue
+            }
+
+            val (bestPerson, bestSim) = enrolled
+                .map { (p, ref) -> p to FaceSDK.similarityCalculation(template, ref) }
+                .maxByOrNull { it.second }!!
+
+            Log.i(TAG, "Best: ${bestPerson.name} sim=${"%.3f".format(bestSim)} threshold=$matchThreshold")
+            if (bestSim >= matchThreshold) {
+                matches.add(FaceMatch(bestPerson.name, bestPerson.roleTag, bestPerson.isVip, bestSim, true, cx, cy, fw, fh))
             } else {
-                matches.add(FaceMatch("Unknown", "Guest", false, sim))
+                matches.add(FaceMatch("Unknown", "Guest", false, bestSim, true, cx, cy, fw, fh))
             }
         }
         return matches
-    }
-
-    private suspend fun detectFaces(bitmap: Bitmap): List<Face> =
-        suspendCancellableCoroutine { cont ->
-            val image = InputImage.fromBitmap(bitmap, 0)
-            detector.process(image)
-                .addOnSuccessListener { cont.resume(it) }
-                .addOnFailureListener { cont.resume(emptyList()) }
-        }
-
-    private fun extractFeatures(bmp: Bitmap): FloatArray {
-        val scaled = Bitmap.createScaledBitmap(bmp, FACE_CROP_SIZE, FACE_CROP_SIZE, true)
-        // 16-bin histogram per channel (R, G, B) = 48 features
-        val hist = FloatArray(48)
-        val pixels = IntArray(FACE_CROP_SIZE * FACE_CROP_SIZE)
-        scaled.getPixels(pixels, 0, FACE_CROP_SIZE, 0, 0, FACE_CROP_SIZE, FACE_CROP_SIZE)
-        scaled.recycle()
-        for (px in pixels) {
-            val r = (px shr 16) and 0xFF
-            val g = (px shr 8) and 0xFF
-            val b = px and 0xFF
-            hist[r / 16]      += 1f
-            hist[16 + g / 16] += 1f
-            hist[32 + b / 16] += 1f
-        }
-        // L2 normalise
-        val norm = sqrt(hist.sumOf { (it * it).toDouble() }).toFloat().coerceAtLeast(1e-6f)
-        return FloatArray(48) { hist[it] / norm }
-    }
-
-    private fun cosineSim(a: FloatArray, b: FloatArray): Float {
-        var dot = 0f; var na = 0f; var nb = 0f
-        for (i in a.indices) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i] }
-        val denom = sqrt(na.toDouble() * nb.toDouble()).toFloat()
-        return if (denom < 1e-6f) 0f else dot / denom
     }
 
     private fun decodeBase64Bitmap(b64: String): Bitmap? = try {
@@ -120,5 +150,5 @@ class FaceRecognizer {
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
     } catch (_: Exception) { null }
 
-    fun close() { detector.close() }
+    fun close() { /* SDK has no explicit teardown */ }
 }

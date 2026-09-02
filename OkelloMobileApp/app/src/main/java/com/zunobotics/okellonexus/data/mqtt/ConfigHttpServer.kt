@@ -5,7 +5,6 @@ import com.zunobotics.okellonexus.data.db.entity.KnowledgeEntry
 import com.zunobotics.okellonexus.data.repository.CameraDetection
 import com.zunobotics.okellonexus.data.repository.CameraFrame
 import com.zunobotics.okellonexus.data.repository.CameraStreamRepository
-import com.zunobotics.okellonexus.data.repository.PiRepository
 import com.zunobotics.okellonexus.data.repository.FaceProfileRepository
 import com.zunobotics.okellonexus.data.repository.KnowledgeRepository
 import com.zunobotics.okellonexus.data.repository.LocationRepository
@@ -36,8 +35,7 @@ class ConfigHttpServer @Inject constructor(
     private val knowledgeRepo: KnowledgeRepository,
     private val faceProfileRepo: FaceProfileRepository,
     private val obstacleRepo: ObstacleAlertRepository,
-    private val cameraStreamRepo: CameraStreamRepository,
-    private val piRepo: PiRepository
+    private val cameraStreamRepo: CameraStreamRepository
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var serverSocket: ServerSocket? = null
@@ -78,7 +76,10 @@ class ConfigHttpServer @Inject constructor(
                                 String(buf, 0, totalRead)
                             } else ""
 
-                            if (method == "POST" && path.startsWith("/knowledge") && bodyText.isNotEmpty()) {
+                            if (method == "POST" && path.startsWith("/enroll_face") && bodyText.isNotEmpty()) {
+                                handlePostEnrollFace(bodyText)
+                                out.write("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n".toByteArray())
+                            } else if (method == "POST" && path.startsWith("/knowledge") && bodyText.isNotEmpty()) {
                                 handlePostKnowledge(bodyText)
                                 out.write("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n".toByteArray())
                             } else if (method == "POST" && path.startsWith("/obstacle_alert") && bodyText.isNotEmpty()) {
@@ -153,6 +154,23 @@ class ConfigHttpServer @Inject constructor(
             Log.i(TAG, "Obstacle alert: ${j.optString("type")} at ${j.optInt("distanceCm")}cm")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse obstacle alert: ${e.message}")
+        }
+    }
+
+    private suspend fun handlePostEnrollFace(body: String) {
+        try {
+            val j = JSONObject(body)
+            val name = j.optString("name").ifBlank { return }
+            val profile = com.zunobotics.okellonexus.data.db.entity.FaceProfile(
+                name = name,
+                roleTag = j.optString("roleTag", "Visitor"),
+                notes = j.optString("notes", ""),
+                photoBase64 = j.optString("photoBase64", "")
+            )
+            faceProfileRepo.save(profile)
+            Log.i(TAG, "New face enrolled from Quest: $name (${profile.roleTag})")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to enroll face: ${e.message}")
         }
     }
 

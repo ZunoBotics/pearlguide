@@ -6,15 +6,34 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- Camera preview — COMPATIBLE mode uses TextureView which renders in Quest 3 VR panels -->
-    <androidx.camera.view.PreviewView
-        android:id="@+id/cameraPreview"
+    <!-- Stereo camera preview — left and right cameras side by side like two eyes -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:implementationMode="compatible"
-        android:visibility="visible" />
+        android:orientation="horizontal">
 
-    <!-- Broker IP settings button (top-left) -->
+        <androidx.camera.view.PreviewView
+            android:id="@+id/cameraPreview"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            app:implementationMode="compatible" />
+
+        <TextureView
+            android:id="@+id/rightCameraPreview"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1" />
+
+    </LinearLayout>
+
+    <!-- Detection overlay — covers full width, boxes remapped to correct half -->
+    <com.okello.robot.head.detection.DetectionOverlayView
+        android:id="@+id/detectionOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Settings button (top-left) -->
     <ImageButton
         android:id="@+id/brokerSettingsButton"
         android:layout_width="48dp"
@@ -23,7 +42,7 @@
         android:layout_margin="12dp"
         android:background="#60000000"
         android:src="@android:drawable/ic_menu_manage"
-        android:contentDescription="Broker IP settings"
+        android:contentDescription="Settings"
         android:padding="10dp" />
 
     <!-- Stereo depth map (top-right corner, semi-transparent) -->

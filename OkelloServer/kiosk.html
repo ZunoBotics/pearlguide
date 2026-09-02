@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Okello Nurse — Simi Tech International Hospital</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --teal:#00897B;--teal-dk:#00695C;--teal-lt:#E0F2F1;
+  --green:#2E7D32;--amber:#E65100;--red:#B71C1C;
+  --text:#212121;--muted:#757575;--border:#E0E0E0;
+}
+html,body{height:100%;width:100%;
+  font-family:'Segoe UI',-apple-system,sans-serif;
+  background:#F0F4F4;color:var(--text);overflow:hidden}
+
+/* ── topbar ── */
+.topbar{position:fixed;top:0;left:0;right:0;height:64px;background:var(--teal);
+  display:flex;align-items:center;padding:0 32px;z-index:10}
+.topbar-title{color:#fff;font-size:22px;font-weight:700}
+.topbar-step{margin-left:auto;color:rgba(255,255,255,.8);font-size:18px;font-weight:500}
+
+/* ── screens ── */
+.screen{display:none;position:absolute;inset:0;padding-top:64px;
+  flex-direction:column;align-items:center;justify-content:center}
+.screen.active{display:flex}
+.inner{width:100%;max-width:840px;padding:24px;display:flex;
+  flex-direction:column;align-items:center;justify-content:center}
+
+/* ── card ── */
+.card{background:#fff;border-radius:20px;padding:44px 40px;width:100%;
+  box-shadow:0 2px 12px rgba(0,0,0,.1)}
+
+/* ── typography ── */
+.lbl{font-size:18px;font-weight:700;letter-spacing:2px;color:var(--muted);text-transform:uppercase}
+.h1{font-size:44px;font-weight:700;color:var(--text);margin-top:10px;line-height:1.2}
+.sub{font-size:24px;color:var(--muted);margin-top:12px;line-height:1.6}
+
+/* ── buttons ── */
+.btn{border:none;border-radius:16px;font-size:26px;font-weight:600;cursor:pointer;
+  padding:20px 36px;min-width:140px;transition:opacity .15s;font-family:inherit}
+.btn:active{opacity:.7}
+.btn-teal{background:var(--teal);color:#fff}
+.btn-outline{background:#fff;color:var(--teal);border:2.5px solid var(--teal)}
+.btn-green{background:var(--green);color:#fff}
+.btn-ghost{background:#F5F5F5;color:var(--muted);border:1px solid var(--border)}
+.btn-row{display:flex;gap:16px;margin-top:32px;flex-wrap:wrap;justify-content:center}
+
+/* ── field list ── */
+.field-row{display:flex;align-items:center;padding:16px 0;border-bottom:1px solid var(--border);gap:12px}
+.field-row:last-child{border-bottom:none}
+.field-name{font-size:18px;color:var(--muted);width:160px;flex-shrink:0}
+.field-val{font-size:26px;font-weight:600;flex:1;color:var(--text);word-break:break-all}
+.field-check{color:var(--green);font-size:26px;flex-shrink:0}
+
+/* ── confirm banner ── */
+#confirm-banner{display:none;position:fixed;bottom:0;left:0;right:0;
+  background:#fff;border-top:4px solid var(--teal);
+  padding:20px 32px 32px;box-shadow:0 -6px 28px rgba(0,0,0,.15);
+  z-index:100;animation:slideUp .22s ease-out}
+#confirm-banner.on{display:block}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.cb-label{font-size:16px;font-weight:700;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase}
+.cb-value{margin-top:10px;background:var(--teal-lt);border:2.5px solid var(--teal);
+  border-radius:16px;padding:18px 24px;font-size:36px;
+  font-weight:700;color:var(--text);word-break:break-all;line-height:1.3}
+.cb-btns{display:flex;gap:12px;margin-top:16px}
+.cb-btns .btn{flex:1;padding:18px 20px;font-size:24px}
+
+/* ── edit modal ── */
+#edit-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);
+  z-index:200;align-items:flex-end;justify-content:center}
+#edit-modal.on{display:flex}
+.edit-panel{background:#fff;border-radius:24px 24px 0 0;
+  padding:24px 24px 20px;width:100%;max-width:960px}
+.edit-panel h3{font-size:20px;font-weight:600;color:var(--muted);margin-bottom:12px}
+
+/* Real text input — inputmode=none keeps system keyboard suppressed */
+.edit-input{width:100%;border:2.5px solid var(--teal);border-radius:14px;
+  padding:16px 20px;font-size:32px;font-weight:600;outline:none;
+  color:var(--text);font-family:inherit;background:#FAFAFA;
+  caret-color:var(--teal);margin-bottom:14px;cursor:text}
+.edit-input::selection{background:var(--teal-lt)}
+
+/* ── numpad ── */
+.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.npbtn{border:none;border-radius:12px;background:#F2F2F2;font-size:30px;
+  font-weight:600;padding:18px 10px;cursor:pointer;color:var(--text);
+  font-family:inherit;touch-action:manipulation}
+.npbtn:active{background:var(--teal-lt)}
+.npbtn.del{font-size:22px;background:#FFEBEE;color:var(--red)}
+
+/* ── qwerty ── */
+.qwerty{display:none;flex-direction:column;gap:8px;margin-bottom:12px}
+.qwerty.on{display:flex}
+.kb-row{display:flex;gap:7px;justify-content:center}
+.kbkey{border:none;border-radius:10px;background:#F2F2F2;font-size:22px;
+  font-weight:600;padding:14px 0;min-width:68px;cursor:pointer;color:var(--text);
+  font-family:inherit;flex:1;max-width:88px;touch-action:manipulation;line-height:1}
+.kbkey:active{background:var(--teal-lt)}
+.kbkey.wide{flex:2.5;max-width:210px;font-size:18px}
+.kbkey.space{flex:5;max-width:440px;font-size:18px}
+.kbkey.shift{background:#E8EAF6;font-size:18px}
+.kbkey.shift.on{background:var(--teal);color:#fff}
+.kbkey.del-key{background:#FFEBEE;color:var(--red);font-size:18px;flex:1.5}
+
+.edit-actions{display:flex;gap:12px}
+.edit-actions .btn{flex:1;font-size:24px;padding:16px}
+
+/* ── idle ── */
+.idle-logo{width:110px;height:110px;background:var(--teal);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;margin-bottom:28px}
+.idle-logo svg{width:64px;height:64px;fill:#fff}
+
+/* ── temperature arc ── */
+.arc-wrap{position:relative;width:240px;height:240px;margin:28px auto}
+.arc-wrap canvas{position:absolute;inset:0}
+.arc-inner{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center}
+
+/* ── queue ── */
+.q-num{font-size:120px;font-weight:900;color:var(--teal);line-height:1;
+  letter-spacing:-3px;text-align:center}
+.q-dept-name{font-size:38px;font-weight:700;color:var(--teal-dk);
+  text-align:center;margin-top:8px}
+.q-countdown{display:inline-block;font-size:18px;color:var(--muted);
+  margin-top:20px;background:#F5F5F5;border-radius:20px;padding:6px 18px}
+
+/* ── emergency ── */
+.em-ring{width:150px;height:150px;background:var(--red);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 28px;animation:pulse 1.2s infinite}
+@keyframes pulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(183,28,28,.4)}
+  50%{box-shadow:0 0 0 28px rgba(183,28,28,0)}
+}
+
+/* ── spinner ── */
+.spinner{width:64px;height:64px;border:6px solid var(--teal-lt);
+  border-top-color:var(--teal);border-radius:50%;margin:28px auto;
+  animation:spin .85s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- ─── TOP BAR ─── -->
+<div class="topbar">
+  <span class="topbar-title">Simi Tech International Hospital</span>
+  <span id="topbar-step" class="topbar-step"></span>
+  <button onclick="exitKiosk()" style="margin-left:16px;background:rgba(0,0,0,0.25);border:none;color:#fff;font-size:20px;width:40px;height:40px;border-radius:50%;cursor:pointer;line-height:1;flex-shrink:0" title="Exit kiosk">✕</button>
+</div>
+
+<!-- ═══════ SCREENS ═══════ -->
+
+<!-- IDLE -->
+<div id="screen-idle" class="screen active">
+  <div class="inner">
+    <div class="idle-logo">
+      <svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 1 0 0 10A5 5 0 0 0 12 2zm0 12c-5.33 0-8 2.67-8 4v2h16v-2c0-1.33-2.67-4-8-4z"/></svg>
+    </div>
+    <p class="lbl">Okello Nurse</p>
+    <h1 class="h1" style="text-align:center">Welcome to Simi Tech<br>International Hospital</h1>
+    <p class="sub" style="text-align:center">Please speak to Okello to begin your registration.</p>
+  </div>
+</div>
+
+<!-- CONSENT -->
+<div id="screen-consent" class="screen">
+  <div class="inner">
+    <div class="card" style="text-align:center">
+      <p class="lbl">Step 1 — Consent</p>
+      <h2 class="h1">May I proceed with your registration?</h2>
+      <p class="sub">Your information will be kept private and secure.</p>
+      <div class="btn-row">
+        <button class="btn btn-teal" onclick="sendInput('Patient consented to registration')">Yes, Proceed</button>
+        <button class="btn btn-outline" onclick="sendInput('Patient declined registration')">No Thanks</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VISIT HISTORY -->
+<div id="screen-visit_history" class="screen">
+  <div class="inner">
+    <div class="card" style="text-align:center">
+      <p class="lbl">Step 2 — Visit History</p>
+      <h2 class="h1">Have you visited this hospital before?</h2>
+      <div class="btn-row">
+        <button class="btn btn-teal" onclick="sendInput('Patient said yes, returning patient')">Yes</button>
+        <button class="btn btn-outline" onclick="sendInput('Patient said no, new patient')">No</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- NEW PATIENT -->
+<div id="screen-new_patient" class="screen">
+  <div class="inner">
+    <div class="card">
+      <p class="lbl">Step 3 — New Patient Registration</p>
+      <h2 class="h1">Registration Details</h2>
+      <p class="sub">Speak each detail to Okello, then confirm on screen.</p>
+      <div id="np-fields" style="margin-top:20px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- RETURNING PATIENT -->
+<div id="screen-returning" class="screen">
+  <div class="inner">
+    <div class="card">
+      <p class="lbl">Step 3 — Returning Patient</p>
+      <h2 class="h1">Welcome Back!</h2>
+      <p class="sub">Tell Okello your Patient Number, National ID, or registered phone number.</p>
+      <div id="ret-fields" style="margin-top:20px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PAYMENT -->
+<div id="screen-payment" class="screen">
+  <div class="inner">
+    <div class="card" style="text-align:center">
+      <p class="lbl">Step 4 — Payment</p>
+      <h2 class="h1">How are you paying today?</h2>
+      <div class="btn-row">
+        <button class="btn btn-teal" onclick="sendInput('Patient is covered by insurance')">Insurance</button>
+        <button class="btn btn-outline" onclick="sendInput('Patient is paying cash or self-pay')">Cash / Self-Pay</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- INSURANCE -->
+<div id="screen-insurance" class="screen">
+  <div class="inner">
+    <div class="card">
+      <p class="lbl">Step 4b — Insurance Details</p>
+      <h2 class="h1">Insurance Information</h2>
+      <p class="sub">Tell Okello your insurance provider and policy number.</p>
+      <div id="ins-fields" style="margin-top:20px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TEMPERATURE -->
+<div id="screen-temperature" class="screen">
+  <div class="inner">
+    <div class="card" style="text-align:center">
+      <p class="lbl">Step 5 — Temperature</p>
+      <h2 class="h1">Temperature Check</h2>
+      <p class="sub">Please hold your wrist or forehead close to the sensor and stay still.</p>
+      <div class="arc-wrap">
+        <canvas id="arc-canvas" width="240" height="240"></canvas>
+        <div class="arc-inner" id="arc-inner">
+          <span style="font-size:52px">🌡️</span>
+        </div>
+      </div>
+      <p id="temp-status" style="font-size:22px;font-weight:600;color:var(--muted)">Reading…</p>
+      <div id="temp-warn" style="display:none;margin-top:14px;background:#FFF3E0;
+        border:2px solid var(--amber);border-radius:14px;padding:12px 24px">
+        <span style="font-size:20px;font-weight:600;color:var(--amber)">⚠ High temperature detected</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- COMPLAINT -->
+<div id="screen-complaint" class="screen">
+  <div class="inner">
+    <div class="card">
+      <p class="lbl">Step 6 — Chief Complaint</p>
+      <h2 class="h1">What brings you in today?</h2>
+      <p class="sub">Speak your complaint to Okello. It will appear below for you to confirm.</p>
+      <div id="cmp-fields" style="margin-top:20px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PROCESSING -->
+<div id="screen-processing" class="screen">
+  <div class="inner">
+    <div class="card" style="text-align:center">
+      <p class="lbl">Processing</p>
+      <h2 class="h1">Finding the right department…</h2>
+      <div class="spinner"></div>
+      <p class="sub">This will only take a moment.</p>
+    </div>
+  </div>
+</div>
+
+<!-- QUEUE -->
+<div id="screen-queue" class="screen">
+  <div class="inner">
+    <div class="card" style="text-align:center">
+      <p class="lbl">Your Queue Number</p>
+      <div class="q-num" id="q-num">—</div>
+      <p style="font-size:22px;color:var(--muted);margin-top:16px;font-weight:500">Please proceed to:</p>
+      <div class="q-dept-name" id="q-dept">—</div>
+      <div class="q-countdown" id="q-countdown">Resetting in 10s</div>
+    </div>
+  </div>
+</div>
+
+<!-- EMERGENCY -->
+<div id="screen-emergency" class="screen" style="background:#FFEBEE">
+  <div class="inner">
+    <div class="card" style="text-align:center;border:2.5px solid var(--red)">
+      <div class="em-ring"><span style="font-size:68px;line-height:1">🚨</span></div>
+      <h2 class="h1" style="color:var(--red)">Emergency Alert</h2>
+      <p class="sub" style="font-size:26px;font-weight:600;margin-top:14px">
+        Please stay where you are.<br>A member of staff is coming right now.
+      </p>
+      <p class="sub">Stay calm. Help is on the way.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ CONFIRM BANNER ═══════ -->
+<div id="confirm-banner">
+  <div class="cb-label" id="cb-label">FULL NAME</div>
+  <div class="cb-value" id="cb-value">—</div>
+  <div class="cb-btns">
+    <button class="btn btn-green" id="cb-confirm">✓ Confirm</button>
+    <button class="btn btn-outline" id="cb-edit">✏ Edit</button>
+    <button class="btn btn-ghost" id="cb-skip" style="display:none">Skip</button>
+  </div>
+</div>
+
+<!-- ═══════ EDIT MODAL ═══════ -->
+<div id="edit-modal">
+  <div class="edit-panel">
+    <h3 id="edit-lbl">Edit Field</h3>
+
+    <!--
+      inputmode="none" suppresses the OS virtual keyboard.
+      The patient can still tap anywhere inside to reposition the cursor.
+      Our custom keyboard then inserts/deletes at that cursor position.
+    -->
+    <input type="text" id="edit-input" class="edit-input"
+           inputmode="none" autocomplete="off" autocorrect="off"
+           spellcheck="false" placeholder="Tap keys below to type…">
+
+    <!-- NUMPAD (phone, NIN, DOB, policy number) -->
+    <div id="numpad" class="numpad" style="display:none">
+      <button class="npbtn" onclick="kbTap('1')">1</button>
+      <button class="npbtn" onclick="kbTap('2')">2</button>
+      <button class="npbtn" onclick="kbTap('3')">3</button>
+      <button class="npbtn" onclick="kbTap('4')">4</button>
+      <button class="npbtn" onclick="kbTap('5')">5</button>
+      <button class="npbtn" onclick="kbTap('6')">6</button>
+      <button class="npbtn" onclick="kbTap('7')">7</button>
+      <button class="npbtn" onclick="kbTap('8')">8</button>
+      <button class="npbtn" onclick="kbTap('9')">9</button>
+      <button class="npbtn del" onclick="kbDel()">⌫</button>
+      <button class="npbtn" onclick="kbTap('0')">0</button>
+      <button class="npbtn" style="font-size:22px" onclick="kbTap('/')">·</button>
+    </div>
+
+    <!-- QWERTY (names, complaint, insurer, ID value) -->
+    <div id="qwerty" class="qwerty">
+      <div class="kb-row" id="kb-row-digits"></div>
+      <div class="kb-row" id="kb-row1"></div>
+      <div class="kb-row" id="kb-row2"></div>
+      <div class="kb-row" id="kb-row3"></div>
+      <div class="kb-row" id="kb-row4"></div>
+    </div>
+
+    <div class="edit-actions">
+      <button class="btn btn-teal" onclick="submitEdit()">Save</button>
+      <button class="btn btn-outline" onclick="closeEdit()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Constants ────────────────────────────────────────────────────────────────
+const FIELD_LABELS = {
+  fullName:'Full Name', dob:'Date of Birth', sex:'Gender',
+  phone:'Phone Number', nin:'National ID', complaint:'Chief Complaint',
+  idType:'ID Type', idValue:'ID Value', insurer:'Insurance Provider',
+  policyNumber:'Policy Number'
+};
+// NIN is alpha-numeric (e.g. CM9302501ABC12D) — QWERTY handles it
+const NUMERIC_FIELDS = new Set(['phone','policyNumber','dob']);
+const SKIPPABLE      = new Set(['nin','idValue']);
+const STEP_LABELS = {
+  idle:'', consent:'Step 1 of 7', visit_history:'Step 2 of 7',
+  new_patient:'Step 3 of 7', returning:'Step 3 of 7',
+  payment:'Step 4 of 7', insurance:'Step 4 of 7',
+  temperature:'Step 5 of 7', complaint:'Step 6 of 7',
+  processing:'Step 7 of 7', queue:'Done ✓', emergency:'EMERGENCY'
+};
+
+// ─── QWERTY builder ───────────────────────────────────────────────────────────
+let _shift = false;
+
+function _buildQwerty() {
+  _buildRow('kb-row-digits', '1234567890'.split(''), ch => kbTap(ch));
+  _buildRow('kb-row1', 'QWERTYUIOP'.split(''), ch => kbTap(_sh(ch)));
+  _buildRow('kb-row2', 'ASDFGHJKL'.split(''), ch => kbTap(_sh(ch)));
+
+  const row3 = document.getElementById('kb-row3');
+  const shBtn = _key('⇧', 'shift', toggleShift); shBtn.id = 'kb-shift';
+  row3.appendChild(shBtn);
+  'ZXCVBNM'.split('').forEach(ch => row3.appendChild(_key(ch, 'kbkey', () => kbTap(_sh(ch)))));
+  row3.appendChild(_key('⌫', 'kbkey del-key', kbDel));
+
+  const row4 = document.getElementById('kb-row4');
+  row4.appendChild(_key('Space', 'kbkey space', () => kbTap(' ')));
+  ['.', '-', "'", ','].forEach(ch => row4.appendChild(_key(ch, 'kbkey wide', () => kbTap(ch))));
+  row4.appendChild(_key('⌫', 'kbkey del-key', kbDel));
+}
+
+function _buildRow(id, chars, handler) {
+  const el = document.getElementById(id);
+  chars.forEach(ch => el.appendChild(_key(ch, 'kbkey', () => handler(ch))));
+}
+
+function _key(label, cls, fn) {
+  const b = document.createElement('button');
+  b.className = cls; b.textContent = label;
+  b.onclick = fn; b.type = 'button'; return b;
+}
+
+function _sh(ch) { return _shift ? ch.toUpperCase() : ch.toLowerCase(); }
+
+function toggleShift() {
+  _shift = !_shift;
+  document.getElementById('kb-shift').classList.toggle('on', _shift);
+  ['kb-row1','kb-row2','kb-row3'].forEach(id => {
+    document.getElementById(id).querySelectorAll('.kbkey:not(.shift):not(.del-key)').forEach(b => {
+      if (/^[a-zA-Z]$/.test(b.textContent))
+        b.textContent = _shift ? b.textContent.toUpperCase() : b.textContent.toLowerCase();
+    });
+  });
+}
+
+// ─── Keyboard insert at cursor ────────────────────────────────────────────────
+function kbTap(ch) {
+  const inp = document.getElementById('edit-input');
+  const s = inp.selectionStart ?? inp.value.length;
+  const e = inp.selectionEnd   ?? s;
+  inp.value = inp.value.slice(0, s) + ch + inp.value.slice(e);
+  const pos = s + ch.length;
+  inp.setSelectionRange(pos, pos);
+  inp.focus();
+  // Auto-revert shift after one letter
+  if (_shift && /^[a-zA-Z]$/.test(ch)) { _shift = false; document.getElementById('kb-shift')?.classList.remove('on'); }
+}
+
+function kbDel() {
+  const inp = document.getElementById('edit-input');
+  const s = inp.selectionStart ?? inp.value.length;
+  const e = inp.selectionEnd   ?? s;
+  if (s !== e) {
+    inp.value = inp.value.slice(0, s) + inp.value.slice(e);
+    inp.setSelectionRange(s, s);
+  } else if (s > 0) {
+    inp.value = inp.value.slice(0, s - 1) + inp.value.slice(s);
+    inp.setSelectionRange(s - 1, s - 1);
+  }
+  inp.focus();
+}
+
+_buildQwerty();
+
+// ─── Session state ────────────────────────────────────────────────────────────
+let _session      = {step:'idle',heard:{},pending:null,confirmed:{},data:{}};
+let _pendingField = null;
+let _pendingValue = null;
+let _editCb       = null;
+let _lastJson     = '';
+let _prevStep     = '';
+let _arcStatus    = 'idle';
+let _arcRaf       = null;
+let _arcStart     = null;
+let _queueTimer   = null;
+
+// ─── API ──────────────────────────────────────────────────────────────────────
+async function exitKiosk() {
+  try { await fetch('/kiosk/exit', {method:'POST'}); } catch(e) {}
+}
+
+async function sendInput(msg) {
+  try {
+    await fetch('/nurse/user-input', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({message: msg})
+    });
+  } catch(e){ console.error(e); }
+}
+async function confirmField(f, v){ hideBanner(); await sendInput(`Patient confirmed ${f}: ${v}`); }
+async function editField(f, v)   { hideBanner(); await sendInput(`Patient edited ${f} to ${v}`); }
+async function skipField(f)      { hideBanner(); await sendInput(`Patient skipped ${f}`); }
+
+// ─── Poll ─────────────────────────────────────────────────────────────────────
+async function poll() {
+  try {
+    const r = await fetch('/nurse/session');
+    if (!r.ok) return;
+    const s = await r.json();
+    const j = JSON.stringify(s);
+    if (j === _lastJson) return;
+    _lastJson = j; _session = s; updateUI(s);
+  } catch(e){}
+}
+setInterval(poll, 650);
+poll();
+
+// ─── UI update ────────────────────────────────────────────────────────────────
+function updateUI(s) {
+  document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+  (document.getElementById('screen-' + (s.step||'idle'))
+   || document.getElementById('screen-idle')).classList.add('active');
+
+  document.getElementById('topbar-step').textContent = STEP_LABELS[s.step] || '';
+
+  renderFields('np-fields',  s, ['fullName','dob','sex','phone','nin']);
+  renderFields('ret-fields', s, ['idType','idValue']);
+  renderFields('ins-fields', s, ['insurer','policyNumber']);
+  renderFields('cmp-fields', s, ['complaint']);
+
+  // Queue screen: show number + department + countdown
+  if (s.step === 'queue') {
+    document.getElementById('q-num').textContent  = s.data?.queueNumber || '—';
+    document.getElementById('q-dept').textContent = s.data?.department  || 'General Outpatient';
+    if (_prevStep !== 'queue') startQueueCountdown();
+  } else {
+    stopQueueCountdown();
+  }
+
+  if (s.step === 'temperature') updateArc(s.data?.temperature ?? null, s.data?.temperatureFault ?? false);
+  else stopArc();
+
+  if (s.pending?.field) showBanner(s.pending.field, s.pending.value);
+  else hideBanner();
+
+  _prevStep = s.step;
+}
+
+function renderFields(id, s, fields) {
+  const el = document.getElementById(id); if (!el) return;
+  el.innerHTML = fields.map(f => {
+    const val  = s.confirmed[f] || s.heard[f] || '';
+    const done = !!s.confirmed[f];
+    return `<div class="field-row">
+      <span class="field-name">${FIELD_LABELS[f]||f}</span>
+      <span class="field-val">${val||'<span style="color:#BDBDBD">—</span>'}</span>
+      ${done ? '<span class="field-check">✓</span>' : ''}
+    </div>`;
+  }).join('');
+}
+
+// ─── Queue countdown ──────────────────────────────────────────────────────────
+function startQueueCountdown() {
+  stopQueueCountdown();
+  let secs = 10;
+  _updateCountdown(secs);
+  _queueTimer = setInterval(() => {
+    secs--;
+    _updateCountdown(secs);
+    if (secs <= 0) {
+      stopQueueCountdown();
+      sendInput('Patient has left, reset for next patient');
+    }
+  }, 1000);
+}
+
+function stopQueueCountdown() {
+  if (_queueTimer) { clearInterval(_queueTimer); _queueTimer = null; }
+}
+
+function _updateCountdown(n) {
+  const el = document.getElementById('q-countdown');
+  if (el) el.textContent = n > 0 ? `Resetting in ${n}s` : 'Resetting…';
+}
+
+// ─── Confirm banner ───────────────────────────────────────────────────────────
+function showBanner(field, value) {
+  _pendingField = field; _pendingValue = value;
+  document.getElementById('cb-label').textContent = (FIELD_LABELS[field]||field).toUpperCase();
+  document.getElementById('cb-value').textContent = value;
+  const skip = document.getElementById('cb-skip');
+  skip.style.display = SKIPPABLE.has(field) ? '' : 'none';
+  skip.onclick = () => skipField(field);
+  document.getElementById('cb-confirm').onclick = () => confirmField(field, value);
+  document.getElementById('cb-edit').onclick    = () => openEdit(field, value);
+  document.getElementById('confirm-banner').classList.add('on');
+}
+
+function hideBanner() {
+  document.getElementById('confirm-banner').classList.remove('on');
+  _pendingField = _pendingValue = null;
+}
+
+// ─── Edit modal ───────────────────────────────────────────────────────────────
+function openEdit(field, current) {
+  const isNum = NUMERIC_FIELDS.has(field);
+  document.getElementById('edit-lbl').textContent = 'Edit ' + (FIELD_LABELS[field]||field);
+  const inp = document.getElementById('edit-input');
+  inp.value = current || '';
+  document.getElementById('numpad').style.display = isNum ? 'grid' : 'none';
+  document.getElementById('qwerty').classList.toggle('on', !isNum);
+  _editCb = newVal => { if (_pendingField) editField(_pendingField, newVal); };
+  document.getElementById('edit-modal').classList.add('on');
+  // Focus moves cursor inside input; patient can then tap to reposition
+  requestAnimationFrame(() => { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); });
+}
+
+function closeEdit() {
+  document.getElementById('edit-modal').classList.remove('on');
+  _editCb = null;
+  if (_pendingField && _pendingValue) showBanner(_pendingField, _pendingValue);
+}
+
+function submitEdit() {
+  const val = document.getElementById('edit-input').value.trim();
+  if (!val) return;
+  document.getElementById('edit-modal').classList.remove('on');
+  if (_editCb) { _editCb(val); _editCb = null; }
+}
+
+// ─── Temperature arc ──────────────────────────────────────────────────────────
+const _arcCtx = document.getElementById('arc-canvas').getContext('2d');
+
+function drawArc(progress, color) {
+  const cx=120, cy=120, r=100;
+  _arcCtx.clearRect(0,0,240,240);
+  _arcCtx.beginPath(); _arcCtx.arc(cx,cy,r,0,Math.PI*2);
+  _arcCtx.strokeStyle='#E0E0E0'; _arcCtx.lineWidth=11; _arcCtx.stroke();
+  if (progress > 0) {
+    _arcCtx.beginPath();
+    _arcCtx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + 2*Math.PI*progress);
+    _arcCtx.strokeStyle=color; _arcCtx.lineWidth=11;
+    _arcCtx.lineCap='round'; _arcCtx.stroke();
+  }
+}
+
+function animateArc() {
+  const now = performance.now();
+  if (!_arcStart) _arcStart = now;
+  drawArc(((now - _arcStart) % 3000) / 3000, '#00897B');
+  if (_arcStatus === 'reading') _arcRaf = requestAnimationFrame(animateArc);
+}
+
+function updateArc(temp, fault) {
+  if (temp != null) {
+    stopArc(); _arcStatus = 'done';
+    drawArc(1.0, '#2E7D32');
+    document.getElementById('arc-inner').innerHTML =
+      `<span style="font-size:56px;font-weight:800;color:#2E7D32;line-height:1">${temp.toFixed(1)}</span>
+       <span style="font-size:24px;font-weight:700;color:#2E7D32">°C</span>`;
+    document.getElementById('temp-status').textContent = 'Done. Thank you.';
+    document.getElementById('temp-status').style.color = '#2E7D32';
+    document.getElementById('temp-warn').style.display = temp >= 37.5 ? '' : 'none';
+  } else if (fault) {
+    stopArc(); _arcStatus = 'fault';
+    drawArc(1.0, '#E65100');
+    document.getElementById('arc-inner').innerHTML =
+      '<span style="font-size:48px">⚠️</span>';
+    document.getElementById('temp-status').textContent = 'Sensor unavailable';
+    document.getElementById('temp-status').style.color = '#E65100';
+    document.getElementById('temp-warn').style.display = 'none';
+  } else if (_arcStatus !== 'reading') {
+    _arcStatus = 'reading'; _arcStart = null;
+    document.getElementById('arc-inner').innerHTML = '<span style="font-size:52px">🌡️</span>';
+    document.getElementById('temp-status').textContent = 'Please hold your wrist close to the sensor…';
+    document.getElementById('temp-status').style.color = '#757575';
+    document.getElementById('temp-warn').style.display = 'none';
+    animateArc();
+  }
+}
+function stopArc() {
+  cancelAnimationFrame(_arcRaf); _arcRaf = null; _arcStatus = 'idle'; _arcStart = null;
+}
+
+drawArc(0, '#00897B');
+</script>
+</body>
+</html>

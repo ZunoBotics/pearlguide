@@ -40,7 +40,7 @@ data class AppSettings(
     val codeSwitching: Boolean = false,
     val pendingCommand: String = "",
     val learningMode: Boolean = false,
-    val piIp: String = "10.154.26.49"
+    val piIp: String = "100.116.191.56"
 )
 
 @Singleton
@@ -64,7 +64,7 @@ class SettingsRepository @Inject constructor(
                 codeSwitching = prefs[AppPrefsKeys.CODE_SWITCHING] ?: false,
                 pendingCommand = prefs[AppPrefsKeys.PENDING_COMMAND] ?: "",
                 learningMode = prefs[AppPrefsKeys.LEARNING_MODE] ?: false,
-                piIp = prefs[AppPrefsKeys.PI_IP] ?: "10.154.26.49"
+                piIp = prefs[AppPrefsKeys.PI_IP] ?: "100.116.191.56"
             )
         }
 

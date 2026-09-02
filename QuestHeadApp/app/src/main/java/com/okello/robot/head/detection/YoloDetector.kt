@@ -1,19 +1,16 @@
 package com.okello.robot.head.detection
 
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
-import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.File
-import java.io.FileInputStream
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.nio.MappedByteBuffer
-import java.nio.channels.FileChannel
+import java.nio.FloatBuffer
 
 private const val TAG = "YoloDetector"
-private const val MODEL_FILE = "yolov8n_float32.tflite"
+private const val MODEL_FILE = "yolov8n.onnx"
 private const val INPUT_SIZE = 320
 private const val CONFIDENCE_THRESHOLD = 0.35f
 private const val IOU_THRESHOLD = 0.45f
@@ -25,7 +22,6 @@ data class YoloResult(
     val cx: Float, val cy: Float, val w: Float, val h: Float   // normalised [0,1]
 )
 
-// COCO 80 class labels
 private val COCO_LABELS = listOf(
     "person","bicycle","car","motorcycle","airplane","bus","train","truck","boat",
     "traffic light","fire hydrant","stop sign","parking meter","bench","bird","cat",
@@ -39,95 +35,99 @@ private val COCO_LABELS = listOf(
     "book","clock","vase","scissors","teddy bear","hair drier","toothbrush"
 )
 
-// Classes that become "obstacle" alerts with a distance estimate
 val OBSTACLE_CLASSES = setOf("person","chair","couch","bed","dining table","bottle","cup",
     "backpack","suitcase","dog","cat","bicycle","motorcycle","car")
 
 class YoloDetector(context: Context) {
 
-    private var interpreter: Interpreter? = null
-    private var gpuDelegate: GpuDelegate? = null
+    private val env = OrtEnvironment.getEnvironment()
+    private var session: OrtSession? = null
 
     init {
         loadModel(context)
     }
 
     private fun loadModel(context: Context) {
-        // Prefer model pushed to files dir (via adb / Pi export)
-        val filesModel = File(context.filesDir, MODEL_FILE)
-        val buffer: MappedByteBuffer? = when {
-            filesModel.exists() -> mapFile(filesModel)
-            else -> tryLoadFromAssets(context)
+        val modelFile = File(context.filesDir, MODEL_FILE)
+        val modelBytes: ByteArray? = when {
+            modelFile.exists() -> modelFile.readBytes()
+            else -> try {
+                context.assets.open(MODEL_FILE).readBytes()
+            } catch (_: Exception) { null }
         }
-        if (buffer == null) {
-            Log.w(TAG, "YOLO model not found — detection disabled. " +
-                "Push yolov8n_float32.tflite to ${filesModel.absolutePath}")
+        if (modelBytes == null) {
+            Log.w(TAG, "YOLO model not found — push $MODEL_FILE to ${modelFile.absolutePath}")
             return
         }
         try {
-            gpuDelegate = GpuDelegate()
-            val opts = Interpreter.Options().addDelegate(gpuDelegate!!)
-            interpreter = Interpreter(buffer, opts)
-            Log.i(TAG, "YOLO loaded (GPU delegate)")
+            val opts = OrtSession.SessionOptions()
+            session = env.createSession(modelBytes, opts)
+            Log.i(TAG, "YOLO loaded via ONNX Runtime (${modelBytes.size / 1024}KB)")
         } catch (e: Exception) {
-            Log.w(TAG, "GPU delegate failed, falling back to CPU: ${e.message}")
-            gpuDelegate?.close(); gpuDelegate = null
-            interpreter = Interpreter(buffer)
-            Log.i(TAG, "YOLO loaded (CPU)")
+            Log.e(TAG, "ONNX session create failed: ${e.message}")
         }
     }
 
-    private fun mapFile(file: File): MappedByteBuffer =
-        FileInputStream(file).channel.map(FileChannel.MapMode.READ_ONLY, 0, file.length())
-
-    private fun tryLoadFromAssets(context: Context): MappedByteBuffer? = try {
-        val afd = context.assets.openFd(MODEL_FILE)
-        FileInputStream(afd.fileDescriptor).channel.map(
-            FileChannel.MapMode.READ_ONLY, afd.startOffset, afd.declaredLength
-        )
-    } catch (_: Exception) { null }
-
     fun detect(bitmap: Bitmap): List<YoloResult> {
-        val interp = interpreter ?: return emptyList()
+        val sess = session ?: return emptyList()
 
         val scaled = Bitmap.createScaledBitmap(bitmap, INPUT_SIZE, INPUT_SIZE, true)
-        val inputBuffer = ByteBuffer.allocateDirect(1 * INPUT_SIZE * INPUT_SIZE * 3 * 4)
-            .order(ByteOrder.nativeOrder())
-
+        // ONNX Runtime expects NCHW float32 input [1, 3, 320, 320]
+        val floatBuf = FloatBuffer.allocate(1 * 3 * INPUT_SIZE * INPUT_SIZE)
         val pixels = IntArray(INPUT_SIZE * INPUT_SIZE)
         scaled.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
-        for (px in pixels) {
-            inputBuffer.putFloat(((px shr 16) and 0xFF) / 255f)
-            inputBuffer.putFloat(((px shr 8) and 0xFF) / 255f)
-            inputBuffer.putFloat((px and 0xFF) / 255f)
-        }
-        inputBuffer.rewind()
         scaled.recycle()
 
-        // YOLOv8n output: [1, 84, 2100]  (cx,cy,w,h + 80 class scores)
-        val rawOutput = Array(1) { Array(84) { FloatArray(2100) } }
-        try {
-            interp.run(inputBuffer, rawOutput)
+        // Write channels in order: R plane, G plane, B plane
+        for (c in 0 until 3) {
+            for (px in pixels) {
+                val v = when (c) {
+                    0 -> (px shr 16) and 0xFF
+                    1 -> (px shr 8)  and 0xFF
+                    else -> px       and 0xFF
+                }
+                floatBuf.put(v / 255f)
+            }
+        }
+        floatBuf.rewind()
+
+        val inputTensor = OnnxTensor.createTensor(
+            env, floatBuf, longArrayOf(1, 3, INPUT_SIZE.toLong(), INPUT_SIZE.toLong())
+        )
+        val inputName = sess.inputNames.iterator().next()
+
+        val output = try {
+            sess.run(mapOf(inputName to inputTensor)).use { result ->
+                // YOLOv8n output: [1, 84, 2100]
+                @Suppress("UNCHECKED_CAST")
+                (result[0].value as Array<Array<FloatArray>>)[0]  // [84][2100]
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Inference error: ${e.message}")
+            inputTensor.close()
             return emptyList()
         }
+        inputTensor.close()
 
         val results = mutableListOf<YoloResult>()
-        val data = rawOutput[0]
         for (col in 0 until 2100) {
-            val cx = data[0][col]
-            val cy = data[1][col]
-            val w  = data[2][col]
-            val h  = data[3][col]
+            val cx = output[0][col]
+            val cy = output[1][col]
+            val w  = output[2][col]
+            val h  = output[3][col]
             var maxConf = 0f; var maxCls = 0
             for (c in 0 until 80) {
-                val s = data[4 + c][col]
+                val s = output[4 + c][col]
                 if (s > maxConf) { maxConf = s; maxCls = c }
             }
             if (maxConf >= CONFIDENCE_THRESHOLD) {
-                results.add(YoloResult(maxCls, COCO_LABELS.getOrElse(maxCls) { "unknown" },
-                    maxConf, cx / INPUT_SIZE, cy / INPUT_SIZE, w / INPUT_SIZE, h / INPUT_SIZE))
+                results.add(YoloResult(
+                    classId = maxCls,
+                    label = COCO_LABELS.getOrElse(maxCls) { "unknown" },
+                    confidence = maxConf,
+                    cx = cx / INPUT_SIZE, cy = cy / INPUT_SIZE,
+                    w  = w  / INPUT_SIZE, h  = h  / INPUT_SIZE
+                ))
             }
         }
         return nms(results)
@@ -157,7 +157,6 @@ class YoloDetector(context: Context) {
     }
 
     fun close() {
-        interpreter?.close(); interpreter = null
-        gpuDelegate?.close(); gpuDelegate = null
+        session?.close(); session = null
     }
 }

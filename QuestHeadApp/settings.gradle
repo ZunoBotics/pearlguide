@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "QuestHeadApp"
 include ':app'
+include ':libfacesdk'

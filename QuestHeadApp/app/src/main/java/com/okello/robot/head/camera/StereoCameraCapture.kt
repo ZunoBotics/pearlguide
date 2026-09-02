@@ -30,8 +30,8 @@ import java.util.concurrent.atomic.AtomicReference
 private const val TAG = "StereoCameraCapture"
 private const val FRAME_INTERVAL_MS = 1000L   // Gemini vision: 1 fps
 private const val DEPTH_INTERVAL_MS = 333L    // depth map: ~3 fps
-private const val RIGHT_W = 320
-private const val RIGHT_H = 240
+private const val RIGHT_W = 640
+private const val RIGHT_H = 480
 
 // Camera 50 (left, world-facing) opened via CameraX with live preview + Gemini frames.
 // Camera 51 (right, world-facing) opened directly via Camera2 for the second stereo eye.
@@ -41,15 +41,22 @@ class StereoCameraCapture(
     private val lifecycleOwner: LifecycleOwner,
     private val previewView: PreviewView? = null,
     private val onFrame: (base64Jpeg: String) -> Unit,
-    private val onDepth: ((StereoDepthEstimator.DepthResult) -> Unit)? = null
+    private val onDepth: ((StereoDepthEstimator.DepthResult) -> Unit)? = null,
+    /** Called at detection rate with raw NV21 bytes + dimensions for FaceSDK.yuv2Bitmap(). */
+    private val onNv21Frame: ((nv21: ByteArray, width: Int, height: Int) -> Unit)? = null,
+    /** TextureView to render the right camera feed (drawn via Canvas). */
+    private val rightPreview: android.view.TextureView? = null
 ) {
     private val analyzerExecutor = Executors.newSingleThreadExecutor()
     private val depthExecutor = Executors.newSingleThreadExecutor()
     private val lastSentAt = AtomicLong(0)
     private val lastDepthAt = AtomicLong(0)
+    private val lastNv21At = AtomicLong(0)
     // Stored without explicit recycling — GC handles them; avoids race with depth thread
     private val lastLeftBmp = AtomicReference<Bitmap?>(null)
     private val lastRightBmp = AtomicReference<Bitmap?>(null)
+
+    fun getLastRightBmp(): Bitmap? = lastRightBmp.get()?.takeIf { !it.isRecycled }
 
     // Camera2 resources for Camera 51
     private var cam2Thread: HandlerThread? = null
@@ -87,7 +94,12 @@ class StereoCameraCapture(
     private fun startCameraX(leftId: String?) {
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
-            val provider = future.get()
+            val provider = try {
+                future.get()
+            } catch (e: Exception) {
+                Log.w(TAG, "CameraX unavailable (headset not worn?): ${e.cause?.message ?: e.message}")
+                return@addListener
+            }
 
             val selector = if (leftId != null) selectorForId(leftId) else CameraSelector.DEFAULT_BACK_CAMERA
             val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView?.surfaceProvider) }
@@ -97,6 +109,9 @@ class StereoCameraCapture(
                 .build()
             analysis.setAnalyzer(analyzerExecutor) { proxy ->
                 try {
+                    // Publish raw NV21 for face detection (avoids JPEG roundtrip)
+                    if (onNv21Frame != null) maybePublishNv21(proxy)
+
                     val bmp = proxy.toBitmap()
                     val scaled = Bitmap.createScaledBitmap(bmp, 640, 480, true)
                     bmp.recycle()
@@ -137,6 +152,18 @@ class StereoCameraCapture(
                 val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@setOnImageAvailableListener
                 lastRightBmp.set(bmp)
                 maybeComputeDepth()
+                // Draw right camera frame to the TextureView preview
+                rightPreview?.let { tv ->
+                    if (tv.isAvailable) {
+                        val canvas = tv.lockCanvas() ?: return@let
+                        try {
+                            canvas.drawBitmap(bmp, null,
+                                android.graphics.Rect(0, 0, tv.width, tv.height), null)
+                        } finally {
+                            tv.unlockCanvasAndPost(canvas)
+                        }
+                    }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Right frame error: ${e.message}")
             } finally {
@@ -198,6 +225,53 @@ class StereoCameraCapture(
             } catch (e: Exception) {
                 Log.e(TAG, "Depth compute error: ${e.message}")
             }
+        }
+    }
+
+    /** Extract NV21 from a YUV_420_888 ImageProxy and forward for face detection at ~2 fps. */
+    private fun maybePublishNv21(proxy: androidx.camera.core.ImageProxy) {
+        val now = System.currentTimeMillis()
+        if (now - lastNv21At.get() < 500L) return   // 2 fps for face detection
+        lastNv21At.set(now)
+        Log.d(TAG, "NV21 tick: format=${proxy.format} ${proxy.width}x${proxy.height} planes=${proxy.planes.size}")
+        try {
+            val yPlane = proxy.planes[0]
+            val uPlane = proxy.planes[1]
+            val vPlane = proxy.planes[2]
+            val w = proxy.width
+            val h = proxy.height
+            val ySize = w * h
+            val nv21 = ByteArray(ySize + ySize / 2)
+            // Copy Y plane
+            val yBuf = yPlane.buffer
+            val yRowStride = yPlane.rowStride
+            if (yRowStride == w) {
+                yBuf.get(nv21, 0, ySize)
+            } else {
+                var offset = 0
+                repeat(h) { row ->
+                    yBuf.position(row * yRowStride)
+                    yBuf.get(nv21, offset, w)
+                    offset += w
+                }
+            }
+            // Interleave V and U into NV21 (VUVU...)
+            val vBuf = vPlane.buffer
+            val uBuf = uPlane.buffer
+            val vRowStride = vPlane.rowStride
+            val vPixelStride = vPlane.pixelStride
+            var offset = ySize
+            for (row in 0 until h / 2) {
+                for (col in 0 until w / 2) {
+                    val vIdx = row * vRowStride + col * vPixelStride
+                    val uIdx = row * uPlane.rowStride + col * uPlane.pixelStride
+                    nv21[offset++] = vBuf.get(vIdx)
+                    nv21[offset++] = uBuf.get(uIdx)
+                }
+            }
+            onNv21Frame?.invoke(nv21, w, h)
+        } catch (e: Exception) {
+            Log.w(TAG, "NV21 extract failed: ${e.message}")
         }
     }
 

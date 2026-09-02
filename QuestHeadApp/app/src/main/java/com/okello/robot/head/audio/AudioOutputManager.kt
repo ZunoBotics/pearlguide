@@ -31,7 +31,7 @@ class AudioOutputManager(
     fun start() {
         val bufferSize = maxOf(
             AudioTrack.getMinBufferSize(OUTPUT_SAMPLE_RATE, OUTPUT_CHANNELS, OUTPUT_FORMAT),
-            OUTPUT_SAMPLE_RATE * 2   // 1 second buffer
+            OUTPUT_SAMPLE_RATE * 4   // 2 seconds at 16-bit mono (48 000 B/s × 2)
         )
 
         audioTrack = AudioTrack.Builder()
@@ -70,10 +70,14 @@ class AudioOutputManager(
         queue.trySend(bytes)
     }
 
-    // Barge-in: Gemini interrupted itself — flush the queue
+    // Barge-in: Gemini interrupted itself — flush the queue and the hardware buffer.
+    // AudioTrack.flush() is only valid when paused or stopped; calling it while playing
+    // corrupts the buffer and causes clicks/breaks. Always pause → flush → play.
     fun flush() {
         while (queue.tryReceive().isSuccess) { /* drain */ }
+        audioTrack?.pause()
         audioTrack?.flush()
+        audioTrack?.play()
         Log.d(TAG, "Audio queue flushed (barge-in)")
     }
 

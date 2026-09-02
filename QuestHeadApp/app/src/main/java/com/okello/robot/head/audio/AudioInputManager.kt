@@ -35,7 +35,7 @@ class AudioInputManager(
         )
 
         recorder = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION,  // hardware noise reduction
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,  // optimised for speech pickup, less suppression
             SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, bufferSize
         ).also { rec ->
             if (rec.state != AudioRecord.STATE_INITIALIZED) {
@@ -51,10 +51,23 @@ class AudioInputManager(
             while (isActive) {
                 val read = recorder?.read(buffer, 0, buffer.size) ?: break
                 if (read > 0) {
+                    amplifyPcm(buffer, read, gain = 3.0f)
                     val encoded = Base64.encodeToString(buffer, 0, read, Base64.NO_WRAP)
                     onChunk(encoded)
                 }
             }
+        }
+    }
+
+    private fun amplifyPcm(buf: ByteArray, count: Int, gain: Float) {
+        var i = 0
+        while (i < count - 1) {
+            val raw = (buf[i].toInt() and 0xFF) or ((buf[i + 1].toInt() and 0xFF) shl 8)
+            val sample = raw.toShort().toInt()
+            val amplified = (sample * gain).toInt().coerceIn(-32768, 32767)
+            buf[i]     = (amplified and 0xFF).toByte()
+            buf[i + 1] = (amplified shr 8 and 0xFF).toByte()
+            i += 2
         }
     }
 

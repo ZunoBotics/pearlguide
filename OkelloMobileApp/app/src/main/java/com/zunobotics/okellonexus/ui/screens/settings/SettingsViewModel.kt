@@ -15,7 +15,7 @@ data class SettingsUiState(
     val cameraQuality: CameraQuality = CameraQuality.MEDIUM,
     val reconnectIntervalSeconds: Float = 5f,
     val autoConnect: Boolean = true,
-    val piIp: String = "10.154.26.49"
+    val piIp: String = "100.116.191.56"
 )
 
 enum class CameraQuality(val label: String) {

@@ -44,6 +44,8 @@ fun MonitorScreen(
     val eventLog by viewModel.eventLog.collectAsState()
     val cameraFrame by viewModel.cameraFrame.collectAsState()
     val piConnected by viewModel.piConnected.collectAsState()
+    val agentRunning by viewModel.agentRunning.collectAsState()
+    val temperature by viewModel.temperature.collectAsState()
 
     Scaffold(
         topBar = {
@@ -105,6 +107,30 @@ fun MonitorScreen(
                 Text("Camera Feed", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
                 Spacer(Modifier.height(8.dp))
                 CameraFeedPanel(frame = cameraFrame)
+            }
+
+            // Agent toggle
+            item {
+                val agentColor = if (agentRunning) SuccessTeal else ErrorRed
+                val agentLabel = if (agentRunning) "Okello is ON" else "Okello is OFF"
+                Button(
+                    onClick = { if (piConnected) viewModel.toggleAgent() },
+                    enabled = piConnected,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = agentColor,
+                        disabledContainerColor = agentColor.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().height(52.dp)
+                ) {
+                    Icon(
+                        if (agentRunning) Icons.Default.MicOff else Icons.Default.Mic,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(agentLabel, style = MaterialTheme.typography.titleSmall)
+                }
             }
 
             // Drive controls
@@ -170,6 +196,10 @@ fun MonitorScreen(
                             if (monitorState.robotStatus.batteryPercent >= 0)
                                 "${monitorState.robotStatus.batteryPercent}%"
                             else "—"
+                        )
+                        StatusRow(
+                            "Patient Temp",
+                            temperature?.let { "%.1f°C (Ambient %.1f°C)".format(it.objectC, it.ambientC) } ?: "—"
                         )
 
                         Divider(color = BorderColor)

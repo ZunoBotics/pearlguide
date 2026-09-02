@@ -23,6 +23,7 @@ android {
 
         // API key injected at build time from local.properties
         buildConfigField "String", "GEMINI_API_KEY", "\"${localProps.getProperty('GEMINI_API_KEY', '')}\""
+        buildConfigField "String", "KBY_LICENCE_KEY", "\"${localProps.getProperty('KBY_LICENCE_KEY', '')}\""
     }
 
     buildFeatures {
@@ -67,11 +68,9 @@ dependencies {
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
 
-    // TensorFlow Lite — YOLO object detection
-    implementation 'org.tensorflow:tensorflow-lite:2.14.0'
-    implementation 'org.tensorflow:tensorflow-lite-support:0.4.4'
-    implementation 'org.tensorflow:tensorflow-lite-gpu:2.14.0'
+    // ONNX Runtime — YOLO object detection
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.17.3'
 
-    // ML Kit — face detection
-    implementation 'com.google.mlkit:face-detection:16.1.5'
+    // kby-ai face SDK (detection, liveness, recognition)
+    implementation project(path: ':libfacesdk')
 }

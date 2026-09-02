@@ -10,6 +10,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 @HiltViewModel
@@ -54,4 +55,42 @@ class KnowledgeViewModel @Inject constructor(
     fun delete(entry: KnowledgeEntry) = viewModelScope.launch {
         repo.delete(entry.id)
     }
+
+    private val _lastImportCount = MutableStateFlow<Int?>(null)
+    val lastImportCount: StateFlow<Int?> = _lastImportCount.asStateFlow()
+
+    // CSV format: title,category,tags,content
+    // Tags are semicolon-separated within the CSV cell. Content is last so commas inside it are safe.
+    fun importFromCsv(lines: List<String>) = viewModelScope.launch {
+        var count = 0
+        val dataLines = if (lines.firstOrNull()?.trimStart()?.lowercase()?.startsWith("title") == true)
+            lines.drop(1) else lines
+        for (line in dataLines) {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) continue
+            val cols = trimmed.split(",", limit = 4)
+            val title = cols.getOrElse(0) { "" }.trim()
+            if (title.isEmpty()) continue
+            val category = cols.getOrElse(1) { "" }.trim().ifBlank { "General" }
+            val tagStr = cols.getOrElse(2) { "" }.trim()
+            val content = cols.getOrElse(3) { "" }.trim()
+            if (content.isEmpty()) continue
+            val tagsJson = if (tagStr.isEmpty()) "[]"
+            else "[${tagStr.split(";").map { "\"${it.trim()}\"" }.joinToString(",")}]"
+            val entry = KnowledgeEntry(
+                id = UUID.randomUUID().toString(),
+                personaId = _selectedPersonaId.value ?: "",
+                title = title,
+                content = content,
+                category = category,
+                tags = tagsJson,
+                source = "document"
+            )
+            repo.add(entry)
+            count++
+        }
+        _lastImportCount.value = count
+    }
+
+    fun clearImportCount() { _lastImportCount.value = null }
 }
