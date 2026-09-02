@@ -1,0 +1,22 @@
+[Unit]
+Description=Okello Nurse Kiosk Browser
+After=okello-gemini.service graphical.target
+Wants=okello-gemini.service
+
+[Service]
+Type=simple
+User=okello
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=DISPLAY=:0
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+# Wait until the Gemini HTTP server is accepting connections
+ExecStartPre=/bin/bash -c 'until curl -sf http://localhost:5000/nurse/session > /dev/null; do sleep 1; done'
+ExecStart=/usr/bin/chromium --kiosk --noerrdialogs --disable-infobars --no-first-run \
+    --disable-session-crashed-bubble --check-for-update-interval=31536000 \
+    --ozone-platform-hint=auto http://localhost:5000/
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target

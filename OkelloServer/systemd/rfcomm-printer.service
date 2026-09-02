@@ -1,0 +1,16 @@
+[Unit]
+Description=Bind RPP02N Bluetooth thermal printer to /dev/rfcomm0
+After=bluetooth.target
+Wants=bluetooth.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Give Bluetooth stack time to settle after boot
+ExecStartPre=/bin/sleep 5
+# Bind printer SPP channel to /dev/rfcomm0 and make world-writable
+ExecStart=/bin/bash -c 'rfcomm bind /dev/rfcomm0 86:67:7A:FA:30:ED 1 && chmod a+rw /dev/rfcomm0 || true'
+ExecStop=/bin/bash -c 'rfcomm release /dev/rfcomm0 2>/dev/null || true'
+
+[Install]
+WantedBy=multi-user.target

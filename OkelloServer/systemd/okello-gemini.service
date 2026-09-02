@@ -1,0 +1,30 @@
+[Unit]
+Description=Okello Gemini Live Voice Agent
+After=network-online.target graphical.target bluetooth.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=okello
+WorkingDirectory=/home/okello/OkelloServer
+# Put secrets in /home/okello/OkelloServer/.env (not committed)
+EnvironmentFile=/home/okello/OkelloServer/.env
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+# Wait for PipeWire/audio session to be ready
+ExecStartPre=/bin/bash -c 'until [ -S /run/user/1000/pipewire-0 ]; do sleep 1; done'
+# Connect Bluetooth speaker/mic (XDOBO Bro 1970 — MAC 06:76:40:8A:87:A3)
+ExecStartPre=/bin/bash -c 'bluetoothctl connect 06:76:40:8A:87:A3 || true'
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 30); do bluetoothctl info 06:76:40:8A:87:A3 | grep -q "Connected: yes" && break; sleep 1; done'
+# Force HFP profile so BT mic is active (not A2DP)
+ExecStartPre=/bin/bash -c 'XDG_RUNTIME_DIR=/run/user/1000 pactl set-card-profile bluez_card.06_76_40_8A_87_A3 headset-head-unit 2>/dev/null || true'
+# Wait for BT mic source to appear in PulseAudio
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 15); do XDG_RUNTIME_DIR=/run/user/1000 pactl list sources short 2>/dev/null | grep -q "bluez_input.06:76:40:8A:87:A3" && break; sleep 1; done'
+ExecStart=/home/okello/OkelloServer/venv/bin/python /home/okello/OkelloServer/gemini_pi_client.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target
